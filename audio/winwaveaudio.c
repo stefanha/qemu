@@ -361,9 +361,9 @@ static int winwave_ctl_out (HWVoiceOut *hw, int cmd, ...)
 
     case VOICE_DISABLE:
         if (!wave->paused) {
-            mr = waveOutPause (wave->hwo);
+            mr = waveOutReset (wave->hwo);
             if (mr != MMSYSERR_NOERROR) {
-                winwave_logerr (mr, "waveOutPause");
+                winwave_logerr (mr, "waveOutReset");
             }
             else {
                 wave->paused = 1;
