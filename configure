@@ -284,6 +284,7 @@ fi
 ar="${AR-${cross_prefix}ar}"
 as="${AS-${cross_prefix}as}"
 cpp="${CPP-$cc -E}"
+nm="${NM-${cross_prefix}nm}"
 objcopy="${OBJCOPY-${cross_prefix}objcopy}"
 ld="${LD-${cross_prefix}ld}"
 libtool="${LIBTOOL-${cross_prefix}libtool}"
@@ -3163,6 +3164,22 @@ if test "$trace_backend" = "dtrace"; then
 fi
 
 ##########################################
+# check for TLS runtime
+
+# Some versions of mingw include the "magic" definitions that make
+# TLS work, some don't.  Check for it.
+
+if test "$mingw32" = yes; then
+  cat > $TMPC << EOF
+int main(void) {}
+EOF
+  compile_prog "" ""
+  if $nm $TMPE | grep _tls_used > /dev/null 2>&1; then
+    mingw32_tls_runtime=yes
+  fi
+fi
+
+##########################################
 # check and set a backend for coroutine
 
 # We prefer ucontext, but it's not always possible. The fallback
@@ -3651,6 +3668,9 @@ if test "$mingw32" = "yes" ; then
   version_micro=0
   echo "CONFIG_FILEVERSION=$version_major,$version_minor,$version_subminor,$version_micro" >> $config_host_mak
   echo "CONFIG_PRODUCTVERSION=$version_major,$version_minor,$version_subminor,$version_micro" >> $config_host_mak
+  if test "$mingw32_tls_runtime" = yes; then
+    echo "CONFIG_MINGW32_TLS_RUNTIME=y" >> $config_host_mak
+  fi
 else
   echo "CONFIG_POSIX=y" >> $config_host_mak
 fi
@@ -4073,6 +4093,7 @@ echo "OBJCC=$objcc" >> $config_host_mak
 echo "AR=$ar" >> $config_host_mak
 echo "AS=$as" >> $config_host_mak
 echo "CPP=$cpp" >> $config_host_mak
+echo "NM=$nm" >> $config_host_mak
 echo "OBJCOPY=$objcopy" >> $config_host_mak
 echo "LD=$ld" >> $config_host_mak
 echo "WINDRES=$windres" >> $config_host_mak
