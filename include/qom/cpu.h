@@ -24,7 +24,6 @@
 #include "hw/qdev-core.h"
 #include "exec/hwaddr.h"
 #include "qemu/thread.h"
-#include "qemu/tls.h"
 #include "qemu/typedefs.h"
 
 typedef int (*WriteCoreDumpFunction)(void *buf, size_t size, void *opaque);
@@ -163,8 +162,17 @@ struct CPUState {
 
 extern CPUState *first_cpu;
 
-DECLARE_TLS(CPUState *, current_cpu);
-#define current_cpu tls_var(current_cpu)
+/* This is thread-local depending on __linux__ because:
+ *  - the only -user mode supporting multiple VCPU threads is linux-user
+ *  - TCG system mode is single-threaded regarding VCPUs
+ *  - KVM system mode is multi-threaded but limited to Linux
+ */
+#if defined CONFIG_KVM || (defined CONFIG_USER_ONLY && defined CONFIG_USE_NPTL)
+extern __thread CPUState *current_cpu;
+#else
+extern CPUState *current_cpu;
+#endif
+
 
 /**
  * cpu_paging_enabled:

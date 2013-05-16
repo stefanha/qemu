@@ -70,9 +70,15 @@ static MemoryRegion io_mem_unassigned;
 #endif
 
 CPUState *first_cpu;
+
 /* current CPU in the current thread. It is only valid inside
-   cpu_exec() */
-DEFINE_TLS(CPUState *, current_cpu);
+ * cpu_exec().  See comment in include/exec/cpu-all.h.  */
+#if defined CONFIG_KVM || (defined CONFIG_USER_ONLY && defined CONFIG_USE_NPTL)
+__thread CPUState *current_cpu;
+#else
+CPUState *current_cpu;
+#endif
+
 /* 0 = Do not count executed instructions.
    1 = Precise instruction counting.
    2 = Adaptive rate instruction counting.  */
