@@ -17,6 +17,7 @@
 #include "qemu-common.h"
 #include "qemu/queue.h"
 #include "qemu/event_notifier.h"
+#include "qemu/tls.h"
 
 typedef struct BlockDriverAIOCB BlockDriverAIOCB;
 typedef void BlockDriverCompletionFunc(void *opaque, int ret);
@@ -73,6 +74,9 @@ typedef struct AioContext {
 
 /* Returns 1 if there are still outstanding AIO requests; 0 otherwise */
 typedef int (AioFlushEventNotifierHandler)(EventNotifier *e);
+
+/* Each thread can have a default AioContext */
+DECLARE_TLS(AioContext*, thread_aio_context);
 
 /**
  * aio_context_new: Allocate a new AioContext.

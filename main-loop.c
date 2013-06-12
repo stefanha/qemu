@@ -143,6 +143,7 @@ int qemu_init_main_loop(void)
 
     gpollfds = g_array_new(FALSE, FALSE, sizeof(GPollFD));
     qemu_aio_context = aio_context_new();
+    *tls_get_thread_aio_context() = qemu_aio_context;
     src = aio_get_g_source(qemu_aio_context);
     g_source_attach(src, NULL);
     g_source_unref(src);

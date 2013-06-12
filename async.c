@@ -27,6 +27,8 @@
 #include "block/thread-pool.h"
 #include "qemu/main-loop.h"
 
+DEFINE_TLS(AioContext*, thread_aio_context);
+
 /***********************************************************/
 /* bottom halves (can be seen as timers which expire ASAP) */
 

@@ -766,6 +766,7 @@ static void *qemu_kvm_cpu_thread_fn(void *arg)
     qemu_thread_get_self(cpu->thread);
     cpu->thread_id = qemu_get_thread_id();
     current_cpu = cpu;
+    *tls_alloc_thread_aio_context() = qemu_get_aio_context();
 
     r = kvm_init_vcpu(cpu);
     if (r < 0) {
@@ -839,6 +840,7 @@ static void tcg_exec_all(void);
 static void tcg_signal_cpu_creation(CPUState *cpu, void *data)
 {
     cpu->thread_id = qemu_get_thread_id();
+    *tls_alloc_thread_aio_context() = qemu_get_aio_context();
     cpu->created = true;
 }
 

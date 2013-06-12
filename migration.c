@@ -522,6 +522,9 @@ static void *migration_thread(void *opaque)
     int64_t start_time = initial_time;
     bool old_vm_running = false;
 
+    /* We use AioContext with the global mutex held */
+    *tls_alloc_thread_aio_context() = qemu_get_aio_context();
+
     DPRINTF("beginning savevm\n");
     qemu_savevm_state_begin(s->file, &s->params);
 
