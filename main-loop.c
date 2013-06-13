@@ -320,7 +320,9 @@ void qemu_del_wait_object(HANDLE handle, WaitObjectFunc *func, void *opaque)
 
 void qemu_fd_register(int fd)
 {
-    WSAEventSelect(fd, event_notifier_get_handle(&qemu_aio_context->notifier),
+    AioContext *ctx = *tls_get_thread_aio_context();
+    HANDLE h = event_notifier_get_handle(&ctx->notifier);
+    WSAEventSelect(fd, h,
                    FD_READ | FD_ACCEPT | FD_CLOSE |
                    FD_CONNECT | FD_WRITE | FD_OOB);
 }
@@ -478,12 +480,12 @@ int main_loop_wait(int nonblocking)
 
 QEMUBH *qemu_bh_new(QEMUBHFunc *cb, void *opaque)
 {
-    return aio_bh_new(qemu_aio_context, cb, opaque);
+    return aio_bh_new(*tls_get_thread_aio_context(), cb, opaque);
 }
 
 bool qemu_aio_wait(void)
 {
-    return aio_poll(qemu_aio_context, true);
+    return aio_poll(*tls_get_thread_aio_context(), true);
 }
 
 #ifdef CONFIG_POSIX
@@ -493,8 +495,8 @@ void qemu_aio_set_fd_handler(int fd,
                              AioFlushHandler *io_flush,
                              void *opaque)
 {
-    aio_set_fd_handler(qemu_aio_context, fd, io_read, io_write, io_flush,
-                       opaque);
+    aio_set_fd_handler(*tls_get_thread_aio_context(), fd,
+                       io_read, io_write, io_flush, opaque);
 }
 #endif
 
@@ -502,5 +504,6 @@ void qemu_aio_set_event_notifier(EventNotifier *notifier,
                                  EventNotifierHandler *io_read,
                                  AioFlushEventNotifierHandler *io_flush)
 {
-    aio_set_event_notifier(qemu_aio_context, notifier, io_read, io_flush);
+    aio_set_event_notifier(*tls_get_thread_aio_context(), notifier,
+                           io_read, io_flush);
 }
