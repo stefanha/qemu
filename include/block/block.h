@@ -60,6 +60,15 @@ typedef struct BlockDevOps {
      * Runs when the size changed (e.g. monitor command block_resize)
      */
     void (*resize_cb)(void *opaque);
+    /*
+     * Notifies the device model to drain any emulation threads
+     *
+     * Upon return, there must be no new or pending requests outside the QEMU
+     * main loop.  The device model may restart emulation threads after this
+     * main loop iteration, for example in a hardware register handler
+     * function.
+     */
+    void (*drain_threads_cb)(void *opaque);
 } BlockDevOps;
 
 #define BDRV_O_RDWR        0x0002

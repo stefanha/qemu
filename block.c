@@ -1438,6 +1438,12 @@ void bdrv_drain_all(void)
     BlockDriverState *bs;
     bool busy;
 
+    QTAILQ_FOREACH(bs, &bdrv_states, list) {
+        if (bs->dev_ops && bs->dev_ops->drain_threads_cb) {
+            bs->dev_ops->drain_threads_cb(bs->dev_opaque);
+        }
+    }
+
     do {
         busy = qemu_aio_wait();
 
