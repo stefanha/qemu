@@ -618,8 +618,24 @@ static void virtio_blk_resize(void *opaque)
     virtio_notify_config(vdev);
 }
 
+static void virtio_blk_drain_threads(void *opaque)
+{
+#ifdef CONFIG_VIRTIO_BLK_DATA_PLANE
+    VirtIOBlock *s = VIRTIO_BLK(opaque);
+
+    if (s->dataplane) {
+        /* Drain I/O and stop thread.  Next time the guest kicks the virtqueue
+         * we restart the thread.  In the meantime the main loop may access the
+         * block device.
+         */
+        virtio_blk_data_plane_stop(s->dataplane);
+    }
+#endif
+}
+
 static const BlockDevOps virtio_block_ops = {
     .resize_cb = virtio_blk_resize,
+    .drain_threads_cb = virtio_blk_drain_threads,
 };
 
 void virtio_blk_set_conf(DeviceState *dev, VirtIOBlkConf *blk)
