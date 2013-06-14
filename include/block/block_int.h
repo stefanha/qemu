@@ -319,13 +319,6 @@ void bdrv_set_io_limits(BlockDriverState *bs,
 void bdrv_add_before_write_notifier(BlockDriverState *bs,
                                     NotifierWithReturn *notifier);
 
-/**
- * bdrv_get_aio_context:
- *
- * Returns: the currently bound #AioContext
- */
-AioContext *bdrv_get_aio_context(BlockDriverState *bs);
-
 #ifdef _WIN32
 int is_windows_drive(const char *filename);
 #endif
