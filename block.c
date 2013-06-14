@@ -169,6 +169,11 @@ static void bdrv_io_limits_intercept(BlockDriverState *bs,
 {
     int64_t wait_time = -1;
 
+    /* Timers currently only work in the main loop */
+    if (*tls_get_thread_aio_context() != qemu_get_aio_context()) {
+        return;
+    }
+
     if (!qemu_co_queue_empty(&bs->throttled_reqs)) {
         qemu_co_queue_wait(&bs->throttled_reqs);
     }
