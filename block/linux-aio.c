@@ -56,6 +56,9 @@ static void qemu_laio_process_completion(struct qemu_laio_state *s,
     int ret;
 
     s->count--;
+    if (s->count == 0) {
+        qemu_aio_set_event_notifier(&s->e, NULL, NULL);
+    }
 
     ret = laiocb->ret;
     if (ret != -ECANCELED) {
@@ -176,6 +179,16 @@ BlockDriverAIOCB *laio_submit(BlockDriverState *bs, void *aio_ctx, int fd,
                         __func__, type);
         goto out_free_aiocb;
     }
+
+    /* Assign our EventNotifier to the current thread's AioContext.  This
+     * allows Linux AIO to be used from multiple threads so long as they flush
+     * before switching threads.
+     */
+    if (s->count == 0) {
+        qemu_aio_set_event_notifier(&s->e, qemu_laio_completion_cb,
+                                    qemu_laio_flush_cb);
+    }
+
     io_set_eventfd(&laiocb->iocb, event_notifier_get_fd(&s->e));
     s->count++;
 
@@ -185,6 +198,9 @@ BlockDriverAIOCB *laio_submit(BlockDriverState *bs, void *aio_ctx, int fd,
 
 out_dec_count:
     s->count--;
+    if (s->count == 0) {
+        qemu_aio_set_event_notifier(&s->e, NULL, NULL);
+    }
 out_free_aiocb:
     qemu_aio_release(laiocb);
     return NULL;
@@ -202,9 +218,6 @@ void *laio_init(void)
     if (io_setup(MAX_EVENTS, &s->ctx) != 0) {
         goto out_close_efd;
     }
-
-    qemu_aio_set_event_notifier(&s->e, qemu_laio_completion_cb,
-                                qemu_laio_flush_cb);
 
     return s;
 
