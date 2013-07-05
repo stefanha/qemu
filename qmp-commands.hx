@@ -1799,6 +1799,8 @@ Each json-object contain the following:
              - "backing-image": the detail of the backing image, it is an
                                 optional json-object only present when a
                                 backing image present for this image
+             - "file": an optional json-object representing the information
+                       about the underlying file or device (when present)
 
 - "io-status": I/O operation status, only present if the device supports it
                and the VM is configured to stop on errors. It's always reset
@@ -1849,6 +1851,12 @@ Example:
                       "filename":"disks/base.qcow2",
                       "format":"qcow2",
                       "virtual-size":2048000
+                  }
+                  "file":{
+                      "filename":"disks/test.qcow2",
+                      "format": "file",
+                      "virtual-size": 262144,
+                      "actual-size": 139264
                   }
                }
             },

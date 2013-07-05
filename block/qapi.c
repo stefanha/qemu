@@ -171,6 +171,13 @@ void bdrv_query_image_info(BlockDriverState *bs,
         return;
     }
 
+    if (bs->file) {
+        bdrv_query_image_info(bs->file, &info->file, &err);
+        if (info->file) {
+            info->has_file = true;
+        }
+    }
+
     *p_info = info;
 }
 
