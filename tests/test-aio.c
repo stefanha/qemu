@@ -32,12 +32,41 @@ typedef struct {
     int max;
 } BHTestData;
 
+typedef struct {
+    QEMUTimer *timer;
+    QEMUTimerList *timer_list;
+    int n;
+    int max;
+    int64_t ns;
+    AioContext *ctx;
+} TimerTestData;
+
 static void bh_test_cb(void *opaque)
 {
     BHTestData *data = opaque;
     if (++data->n < data->max) {
         qemu_bh_schedule(data->bh);
     }
+}
+
+static void timer_test_cb(void *opaque)
+{
+    TimerTestData *data = opaque;
+    if (++data->n < data->max) {
+        qemu_mod_timer(data->timer,
+                       qemu_get_clock_ns(
+                           timerlist_get_clock(data->timer_list)) +
+                       data->ns);
+    }
+}
+
+static void dummy_io_handler_read(void *opaque)
+{
+}
+
+static int dummy_io_handler_flush(void *opaque)
+{
+    return 1;
 }
 
 static void bh_delete_cb(void *opaque)
@@ -341,6 +370,64 @@ static void test_wait_event_notifier_noflush(void)
     event_notifier_cleanup(&data.e);
 }
 
+static void test_timer_schedule(void)
+{
+    TimerTestData data = { .n = 0, .ctx = ctx, .ns = SCALE_MS * 750LL,
+                           .max = 2,
+                           .timer_list = ctx->tlg[QEMU_CLOCK_VIRTUAL] };
+    int pipefd[2];
+
+    /* aio_poll will not block to wait for timers to complete unless it has
+     * an fd to wait on. Fixing this breaks other tests. So create a dummy one.
+     */
+    g_assert(!pipe2(pipefd, O_NONBLOCK));
+    aio_set_fd_handler(ctx, pipefd[0],
+                       dummy_io_handler_read, NULL, dummy_io_handler_flush,
+                       NULL);
+    aio_poll(ctx, false);
+
+    data.timer = timer_new(data.timer_list, SCALE_NS, timer_test_cb, &data);
+    qemu_mod_timer(data.timer,
+                   qemu_get_clock_ns(timerlist_get_clock(data.timer_list)) +
+                   data.ns);
+
+    g_assert_cmpint(data.n, ==, 0);
+
+    /* qemu_mod_timer may well cause an event notifer to have gone off,
+     * so clear that
+     */
+    do {} while (aio_poll(ctx, false));
+
+    g_assert(!aio_poll(ctx, false));
+    g_assert_cmpint(data.n, ==, 0);
+
+    sleep(1);
+    g_assert_cmpint(data.n, ==, 0);
+
+    g_assert(aio_poll(ctx, false));
+    g_assert_cmpint(data.n, ==, 1);
+
+    /* qemu_mod_timer called by our callback */
+    do {} while (aio_poll(ctx, false));
+
+    g_assert(!aio_poll(ctx, false));
+    g_assert_cmpint(data.n, ==, 1);
+
+    g_assert(aio_poll(ctx, true));
+    g_assert_cmpint(data.n, ==, 2);
+
+    /* As max is now 2, an event notifier should not have gone off */
+
+    g_assert(!aio_poll(ctx, false));
+    g_assert_cmpint(data.n, ==, 2);
+
+    aio_set_fd_handler(ctx, pipefd[0], NULL, NULL, NULL, NULL);
+    close(pipefd[0]);
+    close(pipefd[1]);
+
+    qemu_del_timer(data.timer);
+}
+
 /* Now the same tests, using the context as a GSource.  They are
  * very similar to the ones above, with g_main_context_iteration
  * replacing aio_poll.  However:
@@ -623,6 +710,54 @@ static void test_source_wait_event_notifier_noflush(void)
     event_notifier_cleanup(&data.e);
 }
 
+static void test_source_timer_schedule(void)
+{
+    TimerTestData data = { .n = 0, .ctx = ctx, .ns = SCALE_MS * 750LL,
+                           .max = 2,
+                           .timer_list = ctx->tlg[QEMU_CLOCK_VIRTUAL] };
+    int pipefd[2];
+    int64_t expiry;
+
+    /* aio_poll will not block to wait for timers to complete unless it has
+     * an fd to wait on. Fixing this breaks other tests. So create a dummy one.
+     */
+    g_assert(!pipe2(pipefd, O_NONBLOCK));
+    aio_set_fd_handler(ctx, pipefd[0],
+                       dummy_io_handler_read, NULL, dummy_io_handler_flush,
+                       NULL);
+    do {} while (g_main_context_iteration(NULL, false));
+
+    data.timer = timer_new(data.timer_list, SCALE_NS, timer_test_cb, &data);
+    expiry = qemu_get_clock_ns(timerlist_get_clock(data.timer_list)) +
+        data.ns;
+    qemu_mod_timer(data.timer, expiry);
+
+    g_assert_cmpint(data.n, ==, 0);
+
+    sleep(1);
+    g_assert_cmpint(data.n, ==, 0);
+
+    g_assert(g_main_context_iteration(NULL, false));
+    g_assert_cmpint(data.n, ==, 1);
+
+    /* The comment above was not kidding when it said this wakes up itself */
+    do {
+        g_assert(g_main_context_iteration(NULL, true));
+    } while (qemu_get_clock_ns(
+                 timerlist_get_clock(data.timer_list)) <= expiry);
+    sleep(1);
+    g_main_context_iteration(NULL, false);
+
+    g_assert_cmpint(data.n, ==, 2);
+
+    aio_set_fd_handler(ctx, pipefd[0], NULL, NULL, NULL, NULL);
+    close(pipefd[0]);
+    close(pipefd[1]);
+
+    qemu_del_timer(data.timer);
+}
+
+
 /* End of tests.  */
 
 int main(int argc, char **argv)
@@ -651,6 +786,7 @@ int main(int argc, char **argv)
     g_test_add_func("/aio/event/wait",              test_wait_event_notifier);
     g_test_add_func("/aio/event/wait/no-flush-cb",  test_wait_event_notifier_noflush);
     g_test_add_func("/aio/event/flush",             test_flush_event_notifier);
+    g_test_add_func("/aio/timer/schedule",          test_timer_schedule);
 
     g_test_add_func("/aio-gsource/notify",                  test_source_notify);
     g_test_add_func("/aio-gsource/flush",                   test_source_flush);
@@ -665,5 +801,6 @@ int main(int argc, char **argv)
     g_test_add_func("/aio-gsource/event/wait",              test_source_wait_event_notifier);
     g_test_add_func("/aio-gsource/event/wait/no-flush-cb",  test_source_wait_event_notifier_noflush);
     g_test_add_func("/aio-gsource/event/flush",             test_source_flush_event_notifier);
+    g_test_add_func("/aio-gsource/timer/schedule",          test_source_timer_schedule);
     return g_test_run();
 }
