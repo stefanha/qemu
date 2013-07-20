@@ -40,10 +40,6 @@
 /***********************************************************/
 /* timers */
 
-#define QEMU_CLOCK_REALTIME 0
-#define QEMU_CLOCK_VIRTUAL  1
-#define QEMU_CLOCK_HOST     2
-
 struct QEMUClock {
     QEMUTimer *active_timers;
 
@@ -231,7 +227,7 @@ QEMUClock *rt_clock;
 QEMUClock *vm_clock;
 QEMUClock *host_clock;
 
-static QEMUClock *qemu_new_clock(int type)
+QEMUClock *qemu_clock_new(int type)
 {
     QEMUClock *clock;
 
@@ -241,6 +237,11 @@ static QEMUClock *qemu_new_clock(int type)
     clock->last = INT64_MIN;
     notifier_list_init(&clock->reset_notifiers);
     return clock;
+}
+
+void qemu_clock_free(QEMUClock *clock)
+{
+    g_free(clock);
 }
 
 void qemu_clock_enable(QEMUClock *clock, bool enabled)

@@ -11,6 +11,10 @@
 #define SCALE_US 1000
 #define SCALE_NS 1
 
+#define QEMU_CLOCK_REALTIME 0
+#define QEMU_CLOCK_VIRTUAL  1
+#define QEMU_CLOCK_HOST     2
+
 typedef struct QEMUClock QEMUClock;
 typedef void QEMUTimerCB(void *opaque);
 
@@ -31,6 +35,24 @@ extern QEMUClock *vm_clock;
    undergo (e.g. due to NTP). The host clock has the same precision as
    the virtual clock. */
 extern QEMUClock *host_clock;
+
+/**
+ * qemu_clock_new:
+ * @type: the type of clock to be created
+ *
+ * Create a new clock of type @type
+ *
+ * Returns: A pointer to the clock object
+ */
+QEMUClock *qemu_clock_new(int type);
+
+/**
+ * qemu_clock_free:
+ * @clock: the clock to free
+ *
+ * Free clock object @clock
+ */
+void qemu_clock_free(QEMUClock *clock);
 
 int64_t qemu_get_clock_ns(QEMUClock *clock);
 int64_t qemu_clock_has_timers(QEMUClock *clock);
