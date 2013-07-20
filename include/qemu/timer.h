@@ -110,8 +110,25 @@ bool qemu_timer_pending(QEMUTimer *ts);
 bool qemu_timer_expired(QEMUTimer *timer_head, int64_t current_time);
 uint64_t qemu_timer_expire_time_ns(QEMUTimer *ts);
 
-void qemu_run_timers(QEMUClock *clock);
-void qemu_run_all_timers(void);
+/**
+ * qemu_run_timers:
+ * @clock: clock on which to operate
+ *
+ * Run all the timers associated with a clock.
+ *
+ * Returns: true if any timer ran.
+ */
+bool qemu_run_timers(QEMUClock *clock);
+
+/**
+ * qemu_run_all_timers:
+ *
+ * Run all the timers associated with every clock.
+ *
+ * Returns: true if any timer ran.
+ */
+bool qemu_run_all_timers(void);
+
 void configure_alarms(char const *opt);
 void init_clocks(void);
 int init_timer_alarm(void);
