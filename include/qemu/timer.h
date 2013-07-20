@@ -712,9 +712,6 @@ bool qemu_run_timers(QEMUClock *clock);
  */
 bool qemu_run_all_timers(void);
 
-void configure_alarms(char const *opt);
-int init_timer_alarm(void);
-
 /**
  * initclocks:
  *
