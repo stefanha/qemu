@@ -150,13 +150,14 @@ aio_ctx_prepare(GSource *source, gint    *timeout)
 {
     AioContext *ctx = (AioContext *) source;
     QEMUBH *bh;
+    int deadline;
 
     for (bh = ctx->first_bh; bh; bh = bh->next) {
         if (!bh->deleted && bh->scheduled) {
             if (bh->idle) {
                 /* idle bottom halves will be polled at least
                  * every 10ms */
-                *timeout = 10;
+                *timeout = qemu_soonest_timeout(*timeout, 10);
             } else {
                 /* non-idle bottom halves will be executed
                  * immediately */
@@ -164,6 +165,14 @@ aio_ctx_prepare(GSource *source, gint    *timeout)
                 return true;
             }
         }
+    }
+
+    deadline = qemu_timeout_ns_to_ms(timerlistgroup_deadline_ns(ctx->tlg));
+    if (deadline == 0) {
+        *timeout = 0;
+        return true;
+    } else {
+        *timeout = qemu_soonest_timeout(*timeout, deadline);
     }
 
     return false;
@@ -180,7 +189,7 @@ aio_ctx_check(GSource *source)
             return true;
 	}
     }
-    return aio_pending(ctx);
+    return aio_pending(ctx) || (timerlistgroup_deadline_ns(ctx->tlg) == 0);
 }
 
 static gboolean
