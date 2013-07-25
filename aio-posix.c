@@ -166,6 +166,10 @@ static bool aio_dispatch(AioContext *ctx)
             g_free(tmp);
         }
     }
+
+    /* Run our timers */
+    progress |= timerlistgroup_run_timers(ctx->tlg);
+
     return progress;
 }
 
@@ -232,9 +236,9 @@ bool aio_poll(AioContext *ctx, bool blocking)
     }
 
     /* wait until next event */
-    ret = g_poll((GPollFD *)ctx->pollfds->data,
-                 ctx->pollfds->len,
-                 blocking ? -1 : 0);
+    ret = qemu_poll_ns((GPollFD *)ctx->pollfds->data,
+                         ctx->pollfds->len,
+                         blocking ? timerlistgroup_deadline_ns(ctx->tlg) : 0);
 
     /* if we have any readable fds, dispatch event */
     if (ret > 0) {
@@ -245,11 +249,13 @@ bool aio_poll(AioContext *ctx, bool blocking)
                 node->pfd.revents = pfd->revents;
             }
         }
-        if (aio_dispatch(ctx)) {
-            progress = true;
-        }
+    }
+
+    /* Run dispatch even if there were no readable fds to run timers */
+    if (aio_dispatch(ctx)) {
+        progress = true;
     }
 
     assert(progress || busy);
-    return true;
+    return progress;
 }
