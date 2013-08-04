@@ -2,7 +2,6 @@
 #define QEMU_TIMER_H
 
 #include "qemu-common.h"
-#include "qemu/main-loop.h"
 #include "qemu/notify.h"
 
 /* timers */
