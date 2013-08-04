@@ -107,6 +107,7 @@ int64_t qemu_clock_deadline(QEMUClock *clock);
  * @clock: the clock to operate on
  *
  * Calculate the timeout of the earliest expiring timer
+ * on the default timer list associated with the clock
  * in nanoseconds, or -1 if no timer is set to expire.
  *
  * Returns: time until expiry in nanoseconds or -1
@@ -128,6 +129,18 @@ int64_t qemu_clock_deadline_ns(QEMUClock *clock);
  * should be used for a deadline.
  */
 bool qemu_clock_use_for_deadline(QEMUClock *clock);
+
+/**
+ * qemu_clock_use_for_deadline:
+ * @clock: the clock to operate on
+ *
+ * Calculate the deadline across all timer lists associated
+ * with a clock (as opposed to just the default one)
+ * in nanoseconds, or -1 if no timer is set to expire.
+ *
+ * Returns: time until expiry in nanoseconds or -1
+ */
+int64_t qemu_clock_deadline_ns_all(QEMUClock *clock);
 
 /**
  * qemu_clock_get_default_timerlist:
