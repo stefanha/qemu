@@ -73,6 +73,8 @@ struct QEMUTimerList {
     QEMUClock *clock;
     QEMUTimer *active_timers;
     QLIST_ENTRY(QEMUTimerList) list;
+    QEMUTimerListNotifyCB *notify_cb;
+    void *notify_opaque;
 };
 
 struct QEMUTimer {
@@ -400,6 +402,22 @@ QEMUTimerList *qemu_clock_get_default_timerlist(QEMUClock *clock)
     return clock->default_timerlist;
 }
 
+void timerlist_set_notify_cb(QEMUTimerList *timer_list,
+                             QEMUTimerListNotifyCB *cb, void *opaque)
+{
+    timer_list->notify_cb = cb;
+    timer_list->notify_opaque = opaque;
+}
+
+void timerlist_notify(QEMUTimerList *timer_list)
+{
+    if (timer_list->notify_cb) {
+        timer_list->notify_cb(timer_list->notify_opaque);
+    } else {
+        qemu_notify_event();
+    }
+}
+
 /* Transition function to convert a nanosecond timeout to ms
  * This is used where a system does not support ppoll
  */
@@ -524,7 +542,7 @@ void qemu_mod_timer_ns(QEMUTimer *ts, int64_t expire_time)
         /* Interrupt execution to force deadline recalculation.  */
         qemu_clock_warp(ts->timer_list->clock);
         if (use_icount) {
-            qemu_notify_event();
+            timerlist_notify(ts->timer_list);
         }
     }
 }
@@ -582,11 +600,13 @@ bool qemu_run_timers(QEMUClock *clock)
     return timerlist_run_timers(clock->default_timerlist);
 }
 
-void timerlistgroup_init(QEMUTimerListGroup tlg)
+void timerlistgroup_init(QEMUTimerListGroup tlg,
+                         QEMUTimerListNotifyCB *cb, void *opaque)
 {
     QEMUClockType type;
     for (type = 0; type < QEMU_CLOCK_MAX; type++) {
         tlg[type] = timerlist_new(type);
+        timerlist_set_notify_cb(tlg[type], cb, opaque);
     }
 }
 

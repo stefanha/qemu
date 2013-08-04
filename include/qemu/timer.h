@@ -54,6 +54,7 @@ typedef struct QEMUClock QEMUClock;
 typedef struct QEMUTimerList QEMUTimerList;
 typedef QEMUTimerList *QEMUTimerListGroup[QEMU_CLOCK_MAX];
 typedef void QEMUTimerCB(void *opaque);
+typedef void QEMUTimerListNotifyCB(void *opaque);
 
 extern QEMUTimerListGroup main_loop_tlg;
 extern QEMUClock *qemu_clocks[QEMU_CLOCK_MAX];
@@ -231,13 +232,41 @@ QEMUClock *timerlist_get_clock(QEMUTimerList *timer_list);
 bool timerlist_run_timers(QEMUTimerList *timer_list);
 
 /**
+ * timerlist_set_notify_cb:
+ * @timer_list: the timer list to use
+ * @cb: the callback to call on notification
+ * @opaque: the opaque pointer to pass to the callback
+ *
+ * Set the notify callback for a timer list. The notifier
+ * callback is called when the clock is reenabled or a timer
+ * on the list is modified.
+ */
+void timerlist_set_notify_cb(QEMUTimerList *timer_list,
+                             QEMUTimerListNotifyCB *cb, void *opaque);
+
+/**
+ * timerlist_notify:
+ * @timer_list: the timer list to use
+ *
+ * call the notifier callback associated with the timer list.
+ */
+void timerlist_notify(QEMUTimerList *timer_list);
+
+/**
  * timerlistgroup_init:
  * @tlg: the timer list group
+ * @cb: the callback to call when a notify is required
+ * @opaque: the opaque pointer to be passed to the callback.
  *
  * Initialise a timer list group. This must already be
- * allocated in memory and zeroed.
+ * allocated in memory and zeroed. The notifier callback is
+ * called whenever a clock in the timer list group is
+ * reenabled or whenever a timer associated with any timer
+ * list is modified. If @cb is specified as null, qemu_notify()
+ * is used instead.
  */
-void timerlistgroup_init(QEMUTimerListGroup tlg);
+void timerlistgroup_init(QEMUTimerListGroup tlg,
+                         QEMUTimerListNotifyCB *cb, void *opaque);
 
 /**
  * timerlistgroup_deinit:
