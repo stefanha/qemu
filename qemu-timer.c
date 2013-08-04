@@ -59,6 +59,7 @@ struct QEMUClock {
     bool enabled;
 };
 
+QEMUTimerListGroup main_loop_tlg;
 QEMUClock *qemu_clocks[QEMU_CLOCK_MAX];
 
 /* A QEMUTimerList is a list of timers attached to a clock. More
@@ -581,6 +582,45 @@ bool qemu_run_timers(QEMUClock *clock)
     return timerlist_run_timers(clock->default_timerlist);
 }
 
+void timerlistgroup_init(QEMUTimerListGroup tlg)
+{
+    QEMUClockType type;
+    for (type = 0; type < QEMU_CLOCK_MAX; type++) {
+        tlg[type] = timerlist_new(type);
+    }
+}
+
+void timerlistgroup_deinit(QEMUTimerListGroup tlg)
+{
+    QEMUClockType type;
+    for (type = 0; type < QEMU_CLOCK_MAX; type++) {
+        timerlist_free(tlg[type]);
+    }
+}
+
+bool timerlistgroup_run_timers(QEMUTimerListGroup tlg)
+{
+    QEMUClockType type;
+    bool progress = false;
+    for (type = 0; type < QEMU_CLOCK_MAX; type++) {
+        progress |= timerlist_run_timers(tlg[type]);
+    }
+    return progress;
+}
+
+int64_t timerlistgroup_deadline_ns(QEMUTimerListGroup tlg)
+{
+    int64_t deadline = -1;
+    QEMUClockType type;
+    for (type = 0; type < QEMU_CLOCK_MAX; type++) {
+        if (qemu_clock_use_for_deadline(tlg[type]->clock)) {
+            deadline = qemu_soonest_timeout(deadline,
+                                            timerlist_deadline_ns(tlg[type]));
+        }
+    }
+    return deadline;
+}
+
 int64_t qemu_get_clock_ns(QEMUClock *clock)
 {
     int64_t now, last;
@@ -622,6 +662,7 @@ void init_clocks(void)
     for (type = 0; type < QEMU_CLOCK_MAX; type++) {
         if (!qemu_clocks[type]) {
             qemu_clocks[type] = qemu_clock_new(type);
+            main_loop_tlg[type] = qemu_clocks[type]->default_timerlist;
         }
     }
 
