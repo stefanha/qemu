@@ -358,6 +358,24 @@ QEMUTimer *qemu_new_timer(QEMUClock *clock, int scale,
 QEMUTimer *timer_new(QEMUTimerList *timer_list, int scale,
                      QEMUTimerCB *cb, void *opaque);
 
+/**
+ * qemu_timer_new:
+ * @type: the clock type to use
+ * @scale: the scale value for the tiemr
+ * @cb: the callback to be called when the timer expires
+ * @opaque: the opaque pointer to be passed to the callback
+ *
+ * Creeate a new timer and associate it with the default
+ * timer list for the clock type @type.
+ *
+ * Returns: a pointer to the timer
+ */
+static inline QEMUTimer *qemu_timer_new(QEMUClockType type, int scale,
+                                        QEMUTimerCB *cb, void *opaque)
+{
+    return timer_new(main_loop_tlg[type], scale, cb, opaque);
+}
+
 void qemu_free_timer(QEMUTimer *ts);
 void qemu_del_timer(QEMUTimer *ts);
 void qemu_mod_timer_ns(QEMUTimer *ts, int64_t expire_time);
@@ -521,6 +539,23 @@ static inline QEMUTimer *qemu_new_timer_ns(QEMUClock *clock, QEMUTimerCB *cb,
 }
 
 /**
+ * qemu_timer_new_ns:
+ * @clock: the clock to associate with the timer
+ * @callback: the callback to call when the timer expires
+ * @opaque: the opaque pointer to pass to the callback
+ *
+ * Create a new timer with nanosecond scale on the default timer list
+ * associated with the clock.
+ *
+ * Returns: a pointer to the newly created timer
+ */
+static inline QEMUTimer *qemu_timer_new_ns(QEMUClockType type, QEMUTimerCB *cb,
+                                           void *opaque)
+{
+    return qemu_timer_new(type, SCALE_NS, cb, opaque);
+}
+
+/**
  * timer_new_ns:
  * @timer_list: the timer list to associate with the timer
  * @callback: the callback to call when the timer expires
@@ -557,6 +592,23 @@ static inline QEMUTimer *qemu_new_timer_us(QEMUClock *clock,
 }
 
 /**
+ * qemu_timer_new_us:
+ * @clock: the clock to associate with the timer
+ * @callback: the callback to call when the timer expires
+ * @opaque: the opaque pointer to pass to the callback
+ *
+ * Create a new timer with microsecond scale on the default timer list
+ * associated with the clock.
+ *
+ * Returns: a pointer to the newly created timer
+ */
+static inline QEMUTimer *qemu_timer_new_us(QEMUClockType type, QEMUTimerCB *cb,
+                                           void *opaque)
+{
+    return qemu_timer_new(type, SCALE_US, cb, opaque);
+}
+
+/**
  * timer_new_us:
  * @timer_list: the timer list to associate with the timer
  * @callback: the callback to call when the timer expires
@@ -590,6 +642,23 @@ static inline QEMUTimer *qemu_new_timer_ms(QEMUClock *clock,
                                            void *opaque)
 {
     return qemu_new_timer(clock, SCALE_MS, cb, opaque);
+}
+
+/**
+ * qemu_timer_new_ms:
+ * @clock: the clock to associate with the timer
+ * @callback: the callback to call when the timer expires
+ * @opaque: the opaque pointer to pass to the callback
+ *
+ * Create a new timer with millisecond scale on the default timer list
+ * associated with the clock.
+ *
+ * Returns: a pointer to the newly created timer
+ */
+static inline QEMUTimer *qemu_timer_new_ms(QEMUClockType type, QEMUTimerCB *cb,
+                                           void *opaque)
+{
+    return qemu_timer_new(type, SCALE_MS, cb, opaque);
 }
 
 /**
