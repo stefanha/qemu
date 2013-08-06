@@ -255,4 +255,23 @@ void qemu_aio_set_fd_handler(int fd,
                              void *opaque);
 #endif
 
+/**
+ * aio_timer_new:
+ * @ctx: the aio context
+ * @type: the clock type
+ * @scale: the scale
+ * @cb: the callback to call on timer expiry
+ * @opaque: the opaque pointer to pass to the callback
+ *
+ * Generate a new timer attached to the context @ctx.
+ *
+ * Returns: a pointer to the new timer
+ */
+static inline QEMUTimer *aio_timer_new(AioContext *ctx, QEMUClockType type,
+                                       int scale,
+                                       QEMUTimerCB *cb, void *opaque)
+{
+    return timer_new(ctx->tlg[type], scale, cb, opaque);
+}
+
 #endif
