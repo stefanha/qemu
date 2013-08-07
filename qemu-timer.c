@@ -87,7 +87,9 @@ static bool qemu_timer_expired_ns(QEMUTimer *timer_head, int64_t current_time)
     return timer_head && (timer_head->expire_time <= current_time);
 }
 
-static QEMUTimerList *timerlist_new_from_clock(QEMUClock *clock)
+static QEMUTimerList *timerlist_new_from_clock(QEMUClock *clock,
+                                               QEMUTimerListNotifyCB *cb,
+                                               void *opaque)
 {
     QEMUTimerList *timer_list;
 
@@ -101,13 +103,17 @@ static QEMUTimerList *timerlist_new_from_clock(QEMUClock *clock)
 
     timer_list = g_malloc0(sizeof(QEMUTimerList));
     timer_list->clock = clock;
+    timer_list->notify_cb = cb;
+    timer_list->notify_opaque = opaque;
     QLIST_INSERT_HEAD(&clock->timerlists, timer_list, list);
     return timer_list;
 }
 
-QEMUTimerList *timerlist_new(QEMUClockType type)
+QEMUTimerList *timerlist_new(QEMUClockType type,
+                             QEMUTimerListNotifyCB *cb,
+                             void *opaque)
 {
-    return timerlist_new_from_clock(qemu_get_clock(type));
+    return timerlist_new_from_clock(qemu_get_clock(type), cb, opaque);
 }
 
 void timerlist_free(QEMUTimerList *timer_list)
@@ -131,7 +137,8 @@ QEMUClock *qemu_clock_new(QEMUClockType type)
     clock->enabled = true;
     clock->last = INT64_MIN;
     notifier_list_init(&clock->reset_notifiers);
-    clock->default_timerlist = timerlist_new_from_clock(clock);
+    QLIST_INIT(&clock->timerlists);
+    clock->default_timerlist = timerlist_new_from_clock(clock, NULL, NULL);
     return clock;
 }
 
@@ -237,13 +244,6 @@ QEMUClock *timerlist_get_clock(QEMUTimerList *timer_list)
 QEMUTimerList *qemu_clock_get_default_timerlist(QEMUClock *clock)
 {
     return clock->default_timerlist;
-}
-
-void timerlist_set_notify_cb(QEMUTimerList *timer_list,
-                             QEMUTimerListNotifyCB *cb, void *opaque)
-{
-    timer_list->notify_cb = cb;
-    timer_list->notify_opaque = opaque;
 }
 
 void timerlist_notify(QEMUTimerList *timer_list)
@@ -433,8 +433,7 @@ void timerlistgroup_init(QEMUTimerListGroup tlg,
 {
     QEMUClockType type;
     for (type = 0; type < QEMU_CLOCK_MAX; type++) {
-        tlg[type] = timerlist_new(type);
-        timerlist_set_notify_cb(tlg[type], cb, opaque);
+        tlg[type] = timerlist_new(type, cb, opaque);
     }
 }
 

@@ -207,13 +207,20 @@ void qemu_clock_notify(QEMUClock *clock);
 /**
  * timerlist_new:
  * @type: the clock type to associate with the timerlist
+ * @cb: the callback to call on notification
+ * @opaque: the opaque pointer to pass to the callback
  *
  * Create a new timerlist associated with the clock of
  * type @type.
  *
+ * The notifier callback is called when the clock is reenabled or a timer on
+ * the list is modified.
+ *
  * Returns: a pointer to the QEMUTimerList created
  */
-QEMUTimerList *timerlist_new(QEMUClockType type);
+QEMUTimerList *timerlist_new(QEMUClockType type,
+                             QEMUTimerListNotifyCB *cb,
+                             void *opaque);
 
 /**
  * timerlist_free:
@@ -280,19 +287,6 @@ QEMUClock *timerlist_get_clock(QEMUTimerList *timer_list);
  * Returns: true if any timer expired
  */
 bool timerlist_run_timers(QEMUTimerList *timer_list);
-
-/**
- * timerlist_set_notify_cb:
- * @timer_list: the timer list to use
- * @cb: the callback to call on notification
- * @opaque: the opaque pointer to pass to the callback
- *
- * Set the notify callback for a timer list. The notifier
- * callback is called when the clock is reenabled or a timer
- * on the list is modified.
- */
-void timerlist_set_notify_cb(QEMUTimerList *timer_list,
-                             QEMUTimerListNotifyCB *cb, void *opaque);
 
 /**
  * timerlist_notify:
