@@ -46,6 +46,7 @@
 
 struct QEMUClock {
     QEMUTimerList *default_timerlist;
+    QemuMutex timerlists_lock;
     QLIST_HEAD(, QEMUTimerList) timerlists;
 
     NotifierList reset_notifiers;
@@ -105,7 +106,9 @@ static QEMUTimerList *timerlist_new_from_clock(QEMUClock *clock,
     timer_list->clock = clock;
     timer_list->notify_cb = cb;
     timer_list->notify_opaque = opaque;
+    qemu_mutex_lock(&clock->timerlists_lock);
     QLIST_INSERT_HEAD(&clock->timerlists, timer_list, list);
+    qemu_mutex_unlock(&clock->timerlists_lock);
     return timer_list;
 }
 
@@ -118,11 +121,16 @@ QEMUTimerList *timerlist_new(QEMUClockType type,
 
 void timerlist_free(QEMUTimerList *timer_list)
 {
+    QEMUClock *clock = timer_list->clock;
+
     assert(!timerlist_has_timers(timer_list));
-    if (timer_list->clock) {
+    if (clock) {
+        qemu_mutex_lock(&clock->timerlists_lock);
         QLIST_REMOVE(timer_list, list);
-        if (timer_list->clock->default_timerlist == timer_list) {
-            timer_list->clock->default_timerlist = NULL;
+        qemu_mutex_unlock(&clock->timerlists_lock);
+
+        if (clock->default_timerlist == timer_list) {
+            clock->default_timerlist = NULL;
         }
     }
     g_free(timer_list);
@@ -137,6 +145,7 @@ QEMUClock *qemu_clock_new(QEMUClockType type)
     clock->enabled = true;
     clock->last = INT64_MIN;
     notifier_list_init(&clock->reset_notifiers);
+    qemu_mutex_init(&clock->timerlists_lock);
     QLIST_INIT(&clock->timerlists);
     clock->default_timerlist = timerlist_new_from_clock(clock, NULL, NULL);
     return clock;
@@ -145,6 +154,7 @@ QEMUClock *qemu_clock_new(QEMUClockType type)
 void qemu_clock_free(QEMUClock *clock)
 {
     timerlist_free(clock->default_timerlist);
+    qemu_mutex_destroy(&clock->timerlists_lock);
     g_free(clock);
 }
 
@@ -156,9 +166,11 @@ bool qemu_clock_use_for_deadline(QEMUClock *clock)
 void qemu_clock_notify(QEMUClock *clock)
 {
     QEMUTimerList *timer_list;
+    qemu_mutex_lock(&clock->timerlists_lock);
     QLIST_FOREACH(timer_list, &clock->timerlists, list) {
         timerlist_notify(timer_list);
     }
+    qemu_mutex_unlock(&clock->timerlists_lock);
 }
 
 void qemu_clock_enable(QEMUClock *clock, bool enabled)
@@ -229,10 +241,13 @@ int64_t qemu_clock_deadline_ns_all(QEMUClock *clock)
 {
     int64_t deadline = -1;
     QEMUTimerList *timer_list;
+
+    qemu_mutex_lock(&clock->timerlists_lock);
     QLIST_FOREACH(timer_list, &clock->timerlists, list) {
         deadline = qemu_soonest_timeout(deadline,
                                         timerlist_deadline_ns(timer_list));
     }
+    qemu_mutex_unlock(&clock->timerlists_lock);
     return deadline;
 }
 
