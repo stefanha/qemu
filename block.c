@@ -1064,6 +1064,11 @@ int bdrv_open(BlockDriverState *bs, const char *filename, QDict *options,
     if (drvname) {
         drv = bdrv_find_whitelisted_format(drvname, !(flags & BDRV_O_RDWR));
         qdict_del(options, "driver");
+        if (!drv) {
+            error_report("Invalid driver: '%s'", drvname);
+            ret = -EINVAL;
+            goto unlink_and_fail;
+        }
     }
 
     if (!drv) {
