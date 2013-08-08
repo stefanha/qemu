@@ -161,6 +161,15 @@ run_qemu -hda foo:bar
 run_qemu -drive file=foo:bar
 run_qemu -drive file.filename=foo:bar
 
+echo
+echo === -snapshot and snapshot=on ===
+echo
+
+run_qemu -drive file=$TEST_IMG,format=qcow2,snapshot=on
+run_qemu -drive file=$TEST_IMG,driver=qcow2,snapshot=on
+run_qemu -drive file=$TEST_IMG,format=qcow2 -snapshot
+run_qemu -drive file=$TEST_IMG,driver=qcow2 -snapshot
+
 # success, all done
 echo "*** done"
 rm -f $seq.full

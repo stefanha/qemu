@@ -225,4 +225,23 @@ QEMU_PROG: -drive file=foo:bar: could not open disk image foo:bar: No such file 
 Testing: -drive file.filename=foo:bar
 QEMU_PROG: -drive file.filename=foo:bar: could not open disk image ide0-hd0: No such file or directory
 
+
+=== -snapshot and snapshot=on ===
+
+Testing: -drive file=TEST_DIR/t.qcow2,format=qcow2,snapshot=on
+QEMU X.Y.Z monitor - type 'help' for more information
+(qemu) q[K[Dqu[K[D[Dqui[K[D[D[Dquit[K
+
+Testing: -drive file=TEST_DIR/t.qcow2,driver=qcow2,snapshot=on
+QEMU_PROG: -drive file=TEST_DIR/t.qcow2,driver=qcow2,snapshot=on: Can't use snapshot=on with driver-specific options
+QEMU_PROG: -drive file=TEST_DIR/t.qcow2,driver=qcow2,snapshot=on: could not open disk image TEST_DIR/t.qcow2: Invalid argument
+
+Testing: -drive file=TEST_DIR/t.qcow2,format=qcow2 -snapshot
+QEMU X.Y.Z monitor - type 'help' for more information
+(qemu) q[K[Dqu[K[D[Dqui[K[D[D[Dquit[K
+
+Testing: -drive file=TEST_DIR/t.qcow2,driver=qcow2 -snapshot
+QEMU_PROG: -drive file=TEST_DIR/t.qcow2,driver=qcow2: Can't use snapshot=on with driver-specific options
+QEMU_PROG: -drive file=TEST_DIR/t.qcow2,driver=qcow2: could not open disk image TEST_DIR/t.qcow2: Invalid argument
+
 *** done
