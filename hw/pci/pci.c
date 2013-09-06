@@ -641,7 +641,7 @@ static void pci_init_wmask(PCIDevice *dev)
     dev->wmask[PCI_INTERRUPT_LINE] = 0xff;
     pci_set_word(dev->wmask + PCI_COMMAND,
                  PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER |
-                 PCI_COMMAND_INTX_DISABLE);
+                 PCI_COMMAND_INVALIDATE | PCI_COMMAND_INTX_DISABLE);
     if (dev->cap_present & QEMU_PCI_CAP_SERR) {
         pci_word_test_and_set_mask(dev->wmask + PCI_COMMAND, PCI_COMMAND_SERR);
     }

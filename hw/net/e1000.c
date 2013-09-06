@@ -1397,7 +1397,7 @@ static void e1000_class_init(ObjectClass *klass, void *data)
     k->exit = pci_e1000_uninit;
     k->romfile = "efi-e1000.rom";
     k->vendor_id = PCI_VENDOR_ID_INTEL;
-    k->device_id = E1000_DEVID;
+    k->device_id = E1000_DEV_ID_82545EM_COPPER /*E1000_DEVID*/;
     k->revision = 0x03;
     k->class_id = PCI_CLASS_NETWORK_ETHERNET;
     set_bit(DEVICE_CATEGORY_NETWORK, dc->categories);
