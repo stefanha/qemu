@@ -31,6 +31,20 @@ static void get_pointer(Object *obj, Visitor *v, Property *prop,
     visit_type_str(v, &p, name, errp);
 }
 
+/* Same as get_pointer() but frees heap-allocated print() return value */
+static void get_pointer_and_free(Object *obj, Visitor *v, Property *prop,
+                                 char *(*print)(void *ptr),
+                                 const char *name, Error **errp)
+{
+    DeviceState *dev = DEVICE(obj);
+    void **ptr = qdev_get_prop_ptr(dev, prop);
+    char *p;
+
+    p = *ptr ? print(*ptr) : g_strdup("");
+    visit_type_str(v, &p, name, errp);
+    g_free(p);
+}
+
 static void set_pointer(Object *obj, Visitor *v, Property *prop,
                         int (*parse)(DeviceState *dev, const char *str,
                                      void **ptr),
