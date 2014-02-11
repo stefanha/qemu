@@ -2075,6 +2075,24 @@ static ImageInfoSpecific *vmdk_get_specific_info(BlockDriverState *bs)
     return spec_info;
 }
 
+static int vmdk_get_info(BlockDriverState *bs, BlockDriverInfo *bdi)
+{
+    int i;
+    BDRVVmdkState *s = bs->opaque;
+    assert(s->num_extents);
+    bdi->is_compressed = s->extents[0].compressed;
+    bdi->cluster_size = s->extents[0].cluster_sectors << BDRV_SECTOR_BITS;
+    /* See if we have multiple extents but they have different cases */
+    for (i = 1; i < s->num_extents; i++) {
+        if (bdi->is_compressed != s->extents[i].compressed ||
+            bdi->cluster_size !=
+                s->extents[i].cluster_sectors << BDRV_SECTOR_BITS) {
+            return -ENOTSUP;
+        }
+    }
+    return 0;
+}
+
 static QEMUOptionParameter vmdk_create_options[] = {
     {
         .name = BLOCK_OPT_SIZE,
@@ -2131,6 +2149,7 @@ static BlockDriver bdrv_vmdk = {
     .bdrv_has_zero_init           = vmdk_has_zero_init,
     .bdrv_get_specific_info       = vmdk_get_specific_info,
     .bdrv_refresh_limits          = vmdk_refresh_limits,
+    .bdrv_get_info                = vmdk_get_info,
 
     .create_options               = vmdk_create_options,
 };
