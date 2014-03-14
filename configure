@@ -3635,6 +3635,14 @@ if test "$trace_backend" = "dtrace"; then
   trace_backend_stap="no"
   if has 'stap' ; then
     trace_backend_stap="yes"
+
+    # Sometimes sdt.h probes produce insufficient information to access probe
+    # arguments.  The compiler can be forced to place probe arguments in
+    # registers to avoid the issue.  Unfortunately this workaround has a
+    # performance cost so it should be dropped if SystemTap is able to resolve
+    # the underlying issue.
+    # https://sourceware.org/bugzilla/show_bug.cgi?id=13296
+    QEMU_CFLAGS="-DSTAP_SDT_ARG_CONSTRAINT=r $QEMU_CFLAGS"
   fi
 fi
 
