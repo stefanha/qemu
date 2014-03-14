@@ -60,18 +60,18 @@ def read_record(edict, fobj):
 
 def read_trace_file(edict, fobj):
     """Deserialize trace records from a file, yielding record tuples (event_num, timestamp, pid, arg1, ..., arg6)."""
-    header = read_header(fobj, log_header_fmt)
-    if header is None or \
-       header[0] != header_event_id or \
-       header[1] != header_magic:
-        raise ValueError('Not a valid trace file!')
-
-    log_version = header[2]
-    if log_version not in [0, 2, 3]:
-        raise ValueError('Unknown version of tracelog format!')
-    if log_version != 3:
-        raise ValueError('Log format %d not supported with this QEMU release!'
-                         % log_version)
+#    header = read_header(fobj, log_header_fmt)
+#    if header is None or \
+#       header[0] != header_event_id or \
+#       header[1] != header_magic:
+#        raise ValueError('Not a valid trace file!')
+#
+#    log_version = header[2]
+#    if log_version not in [0, 2, 3]:
+#        raise ValueError('Unknown version of tracelog format!')
+#    if log_version != 3:
+#        raise ValueError('Log format %d not supported with this QEMU release!'
+#                         % log_version)
 
     while True:
         rec = read_record(edict, fobj)
