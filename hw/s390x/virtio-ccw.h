@@ -134,7 +134,6 @@ typedef struct VHostSCSICcw {
 typedef struct VirtIOBlkCcw {
     VirtioCcwDevice parent_obj;
     VirtIOBlock vdev;
-    VirtIOBlkConf blk;
 } VirtIOBlkCcw;
 
 /* virtio-balloon-ccw */
