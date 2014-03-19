@@ -159,6 +159,4 @@ typedef struct VirtIOBlock {
         DEFINE_PROP_BIT("config-wce", _state, _field.config_wce, 0, true),    \
         DEFINE_PROP_IOTHREAD("x-iothread", _state, _field.iothread)
 
-void virtio_blk_set_conf(DeviceState *dev, VirtIOBlkConf *blk);
-
 #endif
