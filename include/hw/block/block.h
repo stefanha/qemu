@@ -52,10 +52,24 @@ static inline unsigned int get_physical_block_exp(BlockConf *conf)
     DEFINE_PROP_UINT32("discard_granularity", _state, \
                        _conf.discard_granularity, -1)
 
+#define DEFINE_BLOCK_CHILD_ALIASES(_state, _field)                      \
+    DEFINE_PROP_CHILD_ALIAS("drive", _state, _field),                   \
+    DEFINE_PROP_CHILD_ALIAS("logical_block_size", _state, _field),      \
+    DEFINE_PROP_CHILD_ALIAS("physical_block_size", _state, _field),     \
+    DEFINE_PROP_CHILD_ALIAS("min_io_size", _state, _field),             \
+    DEFINE_PROP_CHILD_ALIAS("opt_io_size", _state, _field),             \
+    DEFINE_PROP_CHILD_ALIAS("bootindex", _state, _field),               \
+    DEFINE_PROP_CHILD_ALIAS("discard_granularity", _state, _field)
+
 #define DEFINE_BLOCK_CHS_PROPERTIES(_state, _conf)      \
     DEFINE_PROP_UINT32("cyls", _state, _conf.cyls, 0),  \
     DEFINE_PROP_UINT32("heads", _state, _conf.heads, 0), \
     DEFINE_PROP_UINT32("secs", _state, _conf.secs, 0)
+
+#define DEFINE_BLOCK_CHS_CHILD_ALIASES(_state, _field)      \
+    DEFINE_PROP_CHILD_ALIAS("cyls", _state, _field),        \
+    DEFINE_PROP_CHILD_ALIAS("heads", _state, _field),       \
+    DEFINE_PROP_CHILD_ALIAS("secs", _state, _field)
 
 /* Configuration helpers */
 

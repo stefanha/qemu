@@ -153,6 +153,23 @@ typedef struct VirtIOBlock {
         DEFINE_PROP_IOTHREAD("x-iothread", _state, _field.iothread)
 #endif /* __linux__ */
 
+#ifdef __linux__
+#define DEFINE_VIRTIO_BLK_CHILD_ALIASES(_state, _field)                       \
+        DEFINE_BLOCK_CHILD_ALIASES(_state, _field),                           \
+        DEFINE_BLOCK_CHS_CHILD_ALIASES(_state, _field),                       \
+        DEFINE_PROP_CHILD_ALIAS("serial", _state, _field),                    \
+        DEFINE_PROP_CHILD_ALIAS("config-wce", _state, _field),                \
+        DEFINE_PROP_CHILD_ALIAS("scsi", _state, _field),                      \
+        DEFINE_PROP_CHILD_ALIAS("x-iothread", _state, _field)
+#else
+#define DEFINE_VIRTIO_BLK_CHILD_ALIASES(_state, _field)                       \
+        DEFINE_BLOCK_CHILD_ALIASES(_state, _field),                           \
+        DEFINE_BLOCK_CHS_CHILD_ALIASES(_state, _field),                       \
+        DEFINE_PROP_CHILD_ALIAS("serial", _state, _field),                    \
+        DEFINE_PROP_CHILD_ALIAS("config-wce", _state, _field),                \
+        DEFINE_PROP_CHILD_ALIAS("x-iothread", _state, _field)
+#endif /* __linux__ */
+
 void virtio_blk_set_conf(DeviceState *dev, VirtIOBlkConf *blk);
 
 #endif
