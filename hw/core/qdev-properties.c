@@ -1018,3 +1018,31 @@ PropertyInfo qdev_prop_size = {
     .get = get_size,
     .set = set_size,
 };
+
+/* --- alias that forwards to a child object's property --- */
+
+static void get_child_alias(Object *obj, Visitor *v, void *opaque,
+                            const char *name, Error **errp)
+{
+    DeviceState *dev = DEVICE(obj);
+    Property *prop = opaque;
+    Object *child = OBJECT(qdev_get_prop_ptr(dev, prop));
+
+    object_property_get(child, v, name, errp);
+}
+
+static void set_child_alias(Object *obj, Visitor *v, void *opaque,
+                            const char *name, Error **errp)
+{
+    DeviceState *dev = DEVICE(obj);
+    Property *prop = opaque;
+    Object *child = OBJECT(qdev_get_prop_ptr(dev, prop));
+
+    object_property_set(child, v, name, errp);
+}
+
+PropertyInfo qdev_prop_child_alias = {
+    .name  = "ChildAlias",
+    .get = get_child_alias,
+    .set = set_child_alias,
+};

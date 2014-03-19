@@ -13,6 +13,7 @@ extern PropertyInfo qdev_prop_uint32;
 extern PropertyInfo qdev_prop_int32;
 extern PropertyInfo qdev_prop_uint64;
 extern PropertyInfo qdev_prop_size;
+extern PropertyInfo qdev_prop_child_alias;
 extern PropertyInfo qdev_prop_string;
 extern PropertyInfo qdev_prop_chr;
 extern PropertyInfo qdev_prop_ptr;
@@ -59,6 +60,33 @@ extern PropertyInfo qdev_prop_arraylen;
             + type_check(bool, typeof_field(_state, _field)),    \
         .qtype     = QTYPE_QBOOL,                                \
         .defval    = (bool)_defval,                              \
+        }
+
+/**
+ * DEFINE_PROP_CHILD_ALIAS:
+ * @_name: property name
+ * @_state: name of the device state structure type
+ * @_field: name of field in @_state, must be Object subclass
+ *
+ * Define device properties that alias a child object's property.  For example,
+ * use the following to forward the 'baz' property where Foo embeds a Bar
+ * object:
+ *
+ *   typedef struct {
+ *       Object parent_obj;
+ *
+ *       Bar bar_obj;
+ *   } Foo;
+ *
+ *   DEFINE_PROP_CHILD_ALIAS("baz", Foo, bar_obj)
+ *
+ * Any access to Foo's 'baz' property actually accesses bar_obj's 'baz'
+ * property.
+ */
+#define DEFINE_PROP_CHILD_ALIAS(_name, _state, _field) {         \
+        .name      = (_name),                                    \
+        .info      = &(qdev_prop_child_alias),                   \
+        .offset    = offsetof(_state, _field),                   \
         }
 
 #define PROP_ARRAY_LEN_PREFIX "len-"
