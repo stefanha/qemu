@@ -1106,6 +1106,7 @@ static void virtio_blk_pci_instance_init(Object *obj)
     VirtIOBlkPCI *dev = VIRTIO_BLK_PCI(obj);
     object_initialize(&dev->vdev, sizeof(dev->vdev), TYPE_VIRTIO_BLK);
     object_property_add_child(obj, "virtio-backend", OBJECT(&dev->vdev), NULL);
+    object_unref(OBJECT(&dev->vdev));
 }
 
 static const TypeInfo virtio_blk_pci_info = {

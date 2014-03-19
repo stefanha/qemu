@@ -191,6 +191,7 @@ static void s390_virtio_blk_instance_init(Object *obj)
     VirtIOBlkS390 *dev = VIRTIO_BLK_S390(obj);
     object_initialize(&dev->vdev, sizeof(dev->vdev), TYPE_VIRTIO_BLK);
     object_property_add_child(obj, "virtio-backend", OBJECT(&dev->vdev), NULL);
+    object_unref(OBJECT(&dev->vdev));
 }
 
 static int s390_virtio_serial_init(VirtIOS390Device *s390_dev)

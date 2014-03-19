@@ -738,6 +738,7 @@ static void virtio_ccw_blk_instance_init(Object *obj)
     VirtIOBlkCcw *dev = VIRTIO_BLK_CCW(obj);
     object_initialize(&dev->vdev, sizeof(dev->vdev), TYPE_VIRTIO_BLK);
     object_property_add_child(obj, "virtio-backend", OBJECT(&dev->vdev), NULL);
+    object_unref(OBJECT(&dev->vdev));
 }
 
 static int virtio_ccw_serial_init(VirtioCcwDevice *ccw_dev)
