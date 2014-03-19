@@ -170,6 +170,4 @@ typedef struct VirtIOBlock {
         DEFINE_PROP_CHILD_ALIAS("x-iothread", _state, _field)
 #endif /* __linux__ */
 
-void virtio_blk_set_conf(DeviceState *dev, VirtIOBlkConf *blk);
-
 #endif
