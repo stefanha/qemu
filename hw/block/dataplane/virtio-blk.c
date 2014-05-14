@@ -336,7 +336,7 @@ void virtio_blk_data_plane_create(VirtIODevice *vdev, VirtIOBlkConf *blk,
 
     *dataplane = NULL;
 
-    if (!blk->data_plane) {
+    if (!blk->data_plane && !blk->iothread) {
         return;
     }
 
