@@ -1138,7 +1138,7 @@ static void ahci_start_transfer(IDEDMA *dma)
 {
     AHCIDevice *ad = DO_UPCAST(AHCIDevice, dma, dma);
     IDEState *s = &ad->port.ifs[0];
-    uint32_t size = (uint32_t)(s->data_end - s->data_ptr);
+    uint32_t size = 0;
     /* write == ram -> device */
     uint32_t opts = le32_to_cpu(ad->cur_cmd->opts);
     int is_write = opts & AHCI_CMD_WRITE;
@@ -1154,6 +1154,8 @@ static void ahci_start_transfer(IDEDMA *dma)
     if (ahci_dma_prepare_buf(dma, is_write)) {
         has_sglist = 1;
     }
+
+    size = (uint32_t)(s->data_end - s->data_ptr);
 
     DPRINTF(ad->port_no, "%sing %d bytes on %s w/%s sglist\n",
             is_write ? "writ" : "read", size, is_atapi ? "atapi" : "ata",
