@@ -1333,6 +1333,8 @@ static bool cmd_set_features(IDEState *s, uint8_t cmd)
         return true;
     }
 
+    fprintf(stderr, "%s feature %#x\n", __func__, s->feature);
+
     /* XXX: valid for CDROM ? */
     switch (s->feature) {
     case 0x02: /* write cache enable */
@@ -1727,6 +1729,101 @@ abort_cmd:
 /* Set the Disk Seek Completed status bit during completion */
 #define SET_DSC (1u << 8)
 
+static struct {
+    uint32_t cmd;
+    const char *name;
+} ide_cmd_names[] = {
+    {WIN_NOP, "WIN_NOP"},
+    {CFA_REQ_EXT_ERROR_CODE, "CFA_REQ_EXT_ERROR_CODE"},
+    {WIN_DSM, "WIN_DSM"},
+    {WIN_DEVICE_RESET, "WIN_DEVICE_RESET"},
+    {WIN_RECAL, "WIN_RECAL"},
+    {WIN_READ, "WIN_READ"},
+    {WIN_READ_ONCE, "WIN_READ_ONCE"},
+    {WIN_READ_EXT, "WIN_READ_EXT"},
+    {WIN_READDMA_EXT, "WIN_READDMA_EXT"},
+    {WIN_READDMA_QUEUED_EXT, "WIN_READDMA_QUEUED_EXT"},
+    {WIN_READ_NATIVE_MAX_EXT, "WIN_READ_NATIVE_MAX_EXT"},
+    {WIN_MULTREAD_EXT, "WIN_MULTREAD_EXT"},
+    {WIN_WRITE, "WIN_WRITE"},
+    {WIN_WRITE_ONCE, "WIN_WRITE_ONCE"},
+    {WIN_WRITE_EXT, "WIN_WRITE_EXT"},
+    {WIN_WRITEDMA_EXT, "WIN_WRITEDMA_EXT"},
+    {WIN_WRITEDMA_QUEUED_EXT, "WIN_WRITEDMA_QUEUED_EXT"},
+    {WIN_SET_MAX_EXT, "WIN_SET_MAX_EXT"},
+    {WIN_SET_MAX_EXT, "WIN_SET_MAX_EXT"},
+    {CFA_WRITE_SECT_WO_ERASE, "CFA_WRITE_SECT_WO_ERASE"},
+    {WIN_MULTWRITE_EXT, "WIN_MULTWRITE_EXT"},
+    {WIN_WRITE_VERIFY, "WIN_WRITE_VERIFY"},
+    {WIN_VERIFY, "WIN_VERIFY"},
+    {WIN_VERIFY_ONCE, "WIN_VERIFY_ONCE"},
+    {WIN_VERIFY_EXT, "WIN_VERIFY_EXT"},
+    {WIN_SEEK, "WIN_SEEK"},
+    {CFA_TRANSLATE_SECTOR, "CFA_TRANSLATE_SECTOR"},
+    {WIN_DIAGNOSE, "WIN_DIAGNOSE"},
+    {WIN_SPECIFY, "WIN_SPECIFY"},
+    {WIN_DOWNLOAD_MICROCODE, "WIN_DOWNLOAD_MICROCODE"},
+    {WIN_STANDBYNOW2, "WIN_STANDBYNOW2"},
+    {WIN_IDLEIMMEDIATE2, "WIN_IDLEIMMEDIATE2"},
+    {WIN_STANDBY2, "WIN_STANDBY2"},
+    {WIN_SETIDLE2, "WIN_SETIDLE2"},
+    {WIN_CHECKPOWERMODE2, "WIN_CHECKPOWERMODE2"},
+    {WIN_SLEEPNOW2, "WIN_SLEEPNOW2"},
+    {WIN_PACKETCMD, "WIN_PACKETCMD"},
+    {WIN_PIDENTIFY, "WIN_PIDENTIFY"},
+    {WIN_QUEUED_SERVICE, "WIN_QUEUED_SERVICE"},
+    {WIN_SMART, "WIN_SMART"},
+    {CFA_ACCESS_METADATA_STORAGE, "CFA_ACCESS_METADATA_STORAGE"},
+    {CFA_ERASE_SECTORS, "CFA_ERASE_SECTORS"},
+    {WIN_MULTREAD, "WIN_MULTREAD"},
+    {WIN_MULTWRITE, "WIN_MULTWRITE"},
+    {WIN_SETMULT, "WIN_SETMULT"},
+    {WIN_READDMA_QUEUED, "WIN_READDMA_QUEUED"},
+    {WIN_READDMA, "WIN_READDMA"},
+    {WIN_READDMA_ONCE, "WIN_READDMA_ONCE"},
+    {WIN_WRITEDMA, "WIN_WRITEDMA"},
+    {WIN_WRITEDMA_ONCE, "WIN_WRITEDMA_ONCE"},
+    {WIN_WRITEDMA_QUEUED, "WIN_WRITEDMA_QUEUED"},
+    {CFA_WRITE_MULTI_WO_ERASE, "CFA_WRITE_MULTI_WO_ERASE"},
+    {WIN_GETMEDIASTATUS, "WIN_GETMEDIASTATUS"},
+    {WIN_DOORLOCK, "WIN_DOORLOCK"},
+    {WIN_DOORUNLOCK, "WIN_DOORUNLOCK"},
+    {WIN_STANDBYNOW1, "WIN_STANDBYNOW1"},
+    {WIN_IDLEIMMEDIATE, "WIN_IDLEIMMEDIATE"},
+    {WIN_STANDBY, "WIN_STANDBY"},
+    {WIN_SETIDLE1, "WIN_SETIDLE1"},
+    {WIN_READ_BUFFER, "WIN_READ_BUFFER"},
+    {WIN_CHECKPOWERMODE1, "WIN_CHECKPOWERMODE1"},
+    {WIN_SLEEPNOW1, "WIN_SLEEPNOW1"},
+    {WIN_FLUSH_CACHE, "WIN_FLUSH_CACHE"},
+    {WIN_WRITE_BUFFER, "WIN_WRITE_BUFFER"},
+    {WIN_FLUSH_CACHE_EXT, "WIN_FLUSH_CACHE_EXT"},
+    {WIN_IDENTIFY, "WIN_IDENTIFY"},
+    {WIN_MEDIAEJECT, "WIN_MEDIAEJECT"},
+    {WIN_SETFEATURES, "WIN_SETFEATURES"},
+    {IBM_SENSE_CONDITION, "IBM_SENSE_CONDITION"},
+    {WIN_SECURITY_SET_PASS, "WIN_SECURITY_SET_PASS"},
+    {WIN_SECURITY_UNLOCK, "WIN_SECURITY_UNLOCK"},
+    {WIN_SECURITY_ERASE_PREPARE, "WIN_SECURITY_ERASE_PREPARE"},
+    {WIN_SECURITY_ERASE_UNIT, "WIN_SECURITY_ERASE_UNIT"},
+    {WIN_SECURITY_FREEZE_LOCK, "WIN_SECURITY_FREEZE_LOCK"},
+    {CFA_WEAR_LEVEL, "CFA_WEAR_LEVEL"},
+    {WIN_SECURITY_DISABLE, "WIN_SECURITY_DISABLE"},
+    {WIN_READ_NATIVE_MAX, "WIN_READ_NATIVE_MAX"},
+    {WIN_SET_MAX, "WIN_SET_MAX"},
+};
+
+static const char *ide_cmd_to_name(uint32_t cmd)
+{
+    size_t i;
+    for (i = 0; i < ARRAY_SIZE(ide_cmd_names); i++) {
+        if (ide_cmd_names[i].cmd == cmd) {
+            return ide_cmd_names[i].name;
+        }
+    }
+    return "<unknown>";
+}
+
 /* See ACS-2 T13/2015-D Table B.2 Command codes */
 static const struct {
     /* Returns true if the completion code should be run */
@@ -1804,7 +1901,7 @@ void ide_exec_cmd(IDEBus *bus, uint32_t val)
     bool complete;
 
 #if defined(DEBUG_IDE)
-    printf("ide: CMD=%02x\n", val);
+    printf("ide: cmd %s (%#02x)\n", ide_cmd_to_name(val), val);
 #endif
     s = idebus_active_if(bus);
     /* ignore commands to non existent slave */

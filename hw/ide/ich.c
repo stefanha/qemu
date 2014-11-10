@@ -95,6 +95,7 @@ static void pci_ich9_reset(DeviceState *dev)
 {
     AHCIPCIState *d = ICH_AHCI(dev);
 
+    fprintf(stderr, "%s\n", __func__);
     ahci_reset(&d->ahci);
 }
 
