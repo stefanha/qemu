@@ -1052,6 +1052,41 @@ static void cmd_set_speed(IDEState *s, uint8_t* buf)
     ide_atapi_cmd_ok(s);
 }
 
+static struct {
+    uint8_t cmd;
+    const char *name;
+} ide_atapi_cmd_names[] = {
+    {0x00, "test_unit_ready"},
+    {0x03, "request_sense"},
+    {0x12, "inquiry"},
+    {0x1b, "start_stop_unit"},
+    {0x1e, "prevent_allow_medium_removal"},
+    {0x25, "read_cdvd_capacity"},
+    {0x28, "read"},
+    {0x2b, "seek"},
+    {0x43, "read_toc_pma_atip"},
+    {0x46, "get_configuration"},
+    {0x4a, "get_event_status_notification"},
+    {0x51, "read_disc_information"},
+    {0x5a, "mode_sense"},
+    {0xa8, "read"},
+    {0xad, "read_dvd_structure"},
+    {0xbb, "set_speed"},
+    {0xbd, "mechanism_status"},
+    {0xbe, "read_cd"},
+};
+
+static const char *ide_atapi_cmd_to_name(uint8_t cmd)
+{
+    size_t i;
+    for (i = 0; i < ARRAY_SIZE(ide_atapi_cmd_names); i++) {
+        if (ide_atapi_cmd_names[i].cmd == cmd) {
+            return ide_atapi_cmd_names[i].name;
+        }
+    }
+    return "<unknown>";
+}
+
 enum {
     /*
      * Only commands flagged as ALLOW_UA are allowed to run under a
@@ -1100,7 +1135,7 @@ void ide_atapi_cmd(IDEState *s)
 #ifdef DEBUG_IDE_ATAPI
     {
         int i;
-        printf("ATAPI limit=0x%x packet:", s->lcyl | (s->hcyl << 8));
+        printf("ATAPI cmd %s (%#x) limit=0x%x packet:", ide_atapi_cmd_to_name(s->io_buffer[0]), s->io_buffer[0], s->lcyl | (s->hcyl << 8));
         for(i = 0; i < ATAPI_PACKET_SIZE; i++) {
             printf(" %02x", buf[i]);
         }

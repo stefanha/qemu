@@ -34,7 +34,7 @@
 #include <hw/ide/pci.h>
 #include <hw/ide/ahci.h>
 
-/* #define DEBUG_AHCI */
+#define DEBUG_AHCI
 
 #ifdef DEBUG_AHCI
 #define DPRINTF(port, fmt, ...) \
@@ -51,6 +51,38 @@ static void ahci_write_fis_d2h(AHCIDevice *ad, uint8_t *cmd_fis);
 static void ahci_init_d2h(AHCIDevice *ad);
 static int ahci_dma_prepare_buf(IDEDMA *dma, int is_write);
 static void ahci_commit_buf(IDEDMA *dma, uint32_t tx_bytes);
+
+static struct {
+    int offset;
+    const char *name;
+} port_reg_names[] = {
+    {PORT_LST_ADDR, "PORT_LST_ADDR"},
+    {PORT_LST_ADDR_HI, "PORT_LST_ADDR_HI"},
+    {PORT_FIS_ADDR, "PORT_FIS_ADDR"},
+    {PORT_FIS_ADDR_HI, "PORT_FIS_ADDR_HI"},
+    {PORT_IRQ_STAT, "PORT_IRQ_STAT"},
+    {PORT_IRQ_MASK, "PORT_IRQ_MASK"},
+    {PORT_CMD, "PORT_CMD"},
+    {PORT_TFDATA, "PORT_TFDATA"},
+    {PORT_SIG, "PORT_SIG"},
+    {PORT_SCR_STAT, "PORT_SCR_STAT"},
+    {PORT_SCR_CTL, "PORT_SCR_CTL"},
+    {PORT_SCR_ERR, "PORT_SCR_ERR"},
+    {PORT_SCR_ACT, "PORT_SCR_ACT"},
+    {PORT_CMD_ISSUE, "PORT_CMD_ISSUE"},
+    {PORT_RESERVED, "PORT_RESERVED"},
+};
+
+static const char *port_reg_offset_to_name(int offset)
+{
+    size_t i;
+    for (i = 0; i < sizeof(port_reg_names) / sizeof(port_reg_names[0]); i++) {
+        if (port_reg_names[i].offset == offset) {
+            return port_reg_names[i].name;
+        }
+    }
+    return "<unknown>";
+}
 
 
 static uint32_t  ahci_port_read(AHCIState *s, int port, int offset)
@@ -113,7 +145,7 @@ static uint32_t  ahci_port_read(AHCIState *s, int port, int offset)
     default:
         val = 0;
     }
-    DPRINTF(port, "offset: 0x%x val: 0x%x\n", offset, val);
+    DPRINTF(port, "offset: %s (0x%x) val: 0x%x\n", port_reg_offset_to_name(offset), offset, val);
     return val;
 
 }
@@ -124,7 +156,7 @@ static void ahci_irq_raise(AHCIState *s, AHCIDevice *dev)
     PCIDevice *pci_dev =
         (PCIDevice *)object_dynamic_cast(OBJECT(d), TYPE_PCI_DEVICE);
 
-    DPRINTF(0, "raise irq\n");
+    DPRINTF(-1, "raise irq\n");
 
     if (pci_dev && msi_enabled(pci_dev)) {
         msi_notify(pci_dev, 0);
@@ -139,7 +171,7 @@ static void ahci_irq_lower(AHCIState *s, AHCIDevice *dev)
     PCIDevice *pci_dev =
         (PCIDevice *)object_dynamic_cast(OBJECT(d), TYPE_PCI_DEVICE);
 
-    DPRINTF(0, "lower irq\n");
+    DPRINTF(-1, "lower irq\n");
 
     if (!pci_dev || !msi_enabled(pci_dev)) {
         qemu_irq_lower(s->irq);
@@ -198,7 +230,7 @@ static void  ahci_port_write(AHCIState *s, int port, int offset, uint32_t val)
 {
     AHCIPortRegs *pr = &s->dev[port].port_regs;
 
-    DPRINTF(port, "offset: 0x%x val: 0x%x\n", offset, val);
+    DPRINTF(port, "offset: %s (0x%x) val: 0x%x\n", port_reg_offset_to_name(offset), offset, val);
     switch (offset) {
         case PORT_LST_ADDR:
             pr->lst_addr = val;
@@ -911,8 +943,8 @@ static void process_ncq_command(AHCIState *s, int port, uint8_t *cmd_fis,
                     "tag %d\n",
                     ncq_tfs->sector_count-1, ncq_tfs->lba, ncq_tfs->tag);
 
-            DPRINTF(port, "tag %d aio read %"PRId64"\n",
-                    ncq_tfs->tag, ncq_tfs->lba);
+            DPRINTF(port, "tag %d aio read %"PRId64" sglist length %zu\n",
+                    ncq_tfs->tag, ncq_tfs->lba, ncq_tfs->sglist.size);
 
             dma_acct_start(ncq_tfs->drive->port.ifs[0].blk, &ncq_tfs->acct,
                            &ncq_tfs->sglist, BLOCK_ACCT_READ);
@@ -924,8 +956,8 @@ static void process_ncq_command(AHCIState *s, int port, uint8_t *cmd_fis,
             DPRINTF(port, "NCQ writing %d sectors to LBA %"PRId64", tag %d\n",
                     ncq_tfs->sector_count-1, ncq_tfs->lba, ncq_tfs->tag);
 
-            DPRINTF(port, "tag %d aio write %"PRId64"\n",
-                    ncq_tfs->tag, ncq_tfs->lba);
+            DPRINTF(port, "tag %d aio write %"PRId64" sglist length %zu\n",
+                    ncq_tfs->tag, ncq_tfs->lba, ncq_tfs->sglist.size);
 
             dma_acct_start(ncq_tfs->drive->port.ifs[0].blk, &ncq_tfs->acct,
                            &ncq_tfs->sglist, BLOCK_ACCT_WRITE);
@@ -1308,6 +1340,8 @@ void ahci_reset(AHCIState *s)
 {
     AHCIPortRegs *pr;
     int i;
+
+    fprintf(stderr, "%s\n", __func__);
 
     s->control_regs.irqstatus = 0;
     /* AHCI Enable (AE)
