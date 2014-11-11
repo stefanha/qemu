@@ -740,8 +740,8 @@ void ide_dma_cb(void *opaque, int ret)
     }
 
 #ifdef DEBUG_AIO
-    printf("ide_dma_cb: sector_num=%" PRId64 " n=%d, cmd_cmd=%d\n",
-           sector_num, n, s->dma_cmd);
+    printf("ide_dma_cb: sector_num=%" PRId64 " n=%d sg.size=%zu, cmd_cmd=%d\n",
+           sector_num, n, s->sg.size, s->dma_cmd);
 #endif
 
     if ((s->dma_cmd == IDE_DMA_READ || s->dma_cmd == IDE_DMA_WRITE) &&

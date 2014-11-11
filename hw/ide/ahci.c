@@ -317,6 +317,24 @@ static void  ahci_port_write(AHCIState *s, int port, int offset, uint32_t val)
     }
 }
 
+static const char *mem_reg_to_name(hwaddr addr)
+{
+    switch (addr) {
+    case HOST_CAP:
+        return "HOST_CAP";
+    case HOST_CTL:
+        return "HOST_CTL";
+    case HOST_IRQ_STAT:
+        return "HOST_IRQ_STAT";
+    case HOST_PORTS_IMPL:
+        return "HOST_PORTS_IMPL";
+    case HOST_VERSION:
+        return "HOST_VERSION";
+    default:
+        return "<unknown>";
+    }
+}
+
 static uint64_t ahci_mem_read(void *opaque, hwaddr addr,
                               unsigned size)
 {
@@ -340,9 +358,12 @@ static uint64_t ahci_mem_read(void *opaque, hwaddr addr,
         case HOST_VERSION:
             val = s->control_regs.version;
             break;
+        default:
+            fprintf(stderr, "%s *** unknown host control register ***\n", __func__);
+            break;
         }
 
-        DPRINTF(-1, "(addr 0x%08X), val 0x%08X\n", (unsigned) addr, val);
+        DPRINTF(-1, "%s (0x%08X), val 0x%08X\n", mem_reg_to_name(addr), (unsigned) addr, val);
     } else if ((addr >= AHCI_PORT_REGS_START_ADDR) &&
                (addr < (AHCI_PORT_REGS_START_ADDR +
                 (s->ports * AHCI_PORT_ADDR_OFFSET_LEN)))) {
@@ -368,7 +389,7 @@ static void ahci_mem_write(void *opaque, hwaddr addr,
     }
 
     if (addr < AHCI_GENERIC_HOST_CONTROL_REGS_MAX_ADDR) {
-        DPRINTF(-1, "(addr 0x%08X), val 0x%08"PRIX64"\n", (unsigned) addr, val);
+        DPRINTF(-1, "%s (0x%08X), val 0x%08"PRIX64"\n", mem_reg_to_name(addr), (unsigned) addr, val);
 
         switch (addr) {
             case HOST_CAP: /* R/WO, RO */
@@ -626,6 +647,8 @@ static void ahci_write_fis_sdb(AHCIState *s, int port, uint32_t finished)
         (ad->port.ifs[0].status & 0x77) |
         (pr->tfdata & 0x88);
 
+    debug_print_fis(&ad->res_fis[RES_FIS_SDBFIS], 8);
+
     ahci_trigger_irq(s, ad, PORT_IRQ_SDB_FIS);
 }
 
@@ -741,6 +764,8 @@ static void ahci_write_fis_d2h(AHCIDevice *ad, uint8_t *cmd_fis)
         d2h_fis[i] = 0;
     }
 
+    debug_print_fis(d2h_fis, 14);
+
     /* Update shadow registers: */
     pr->tfdata = (ad->port.ifs[0].error << 8) |
         ad->port.ifs[0].status;
@@ -823,7 +848,7 @@ static int ahci_populate_sglist(AHCIDevice *ad, QEMUSGList *sglist,
         }
         if ((off_idx == -1) || (off_pos < 0) || (off_pos > tbl_entry_size)) {
             DPRINTF(ad->port_no, "%s: Incorrect offset! "
-                            "off_idx: %d, off_pos: %d\n",
+                            "off_idx: %d, off_pos: %" PRId64 "\n",
                             __func__, off_idx, off_pos);
             r = -1;
             goto out;
