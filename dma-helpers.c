@@ -133,6 +133,7 @@ static void dma_blk_cb(void *opaque, int ret)
     DMAAIOCB *dbs = (DMAAIOCB *)opaque;
     dma_addr_t cur_addr, cur_len;
     void *mem;
+    int i;
 
     trace_dma_blk_cb(dbs, ret);
 
@@ -169,6 +170,13 @@ static void dma_blk_cb(void *opaque, int ret)
         qemu_iovec_discard_back(&dbs->iov, dbs->iov.size & ~BDRV_SECTOR_MASK);
     }
 
+    fprintf(stderr, "%s sector_num %" PRId64 " size %zu ", __func__, dbs->sector_num, dbs->iov.size);
+    for (i = 0; i < dbs->iov.niov; i++) {
+        fprintf(stderr, "[%p+%zu) ",
+                dbs->iov.iov[i].iov_base,
+                dbs->iov.iov[i].iov_len);
+    }
+    fprintf(stderr, "\n");
     dbs->acb = dbs->io_func(dbs->blk, dbs->sector_num, &dbs->iov,
                             dbs->iov.size / 512, dma_blk_cb, dbs);
     assert(dbs->acb);
