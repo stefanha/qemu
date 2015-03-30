@@ -15,6 +15,10 @@
 #include "hw/virtio/vhost-backend.h"
 #include "qemu/error-report.h"
 
+/* TODO rely on system headers, -ENOSYS for old kernel headers */
+#define VHOST_VSOCK_SET_GUEST_CID _IOW(0xAF, 0x60, uint64_t)
+#define VHOST_VSOCK_SET_RUNNING _IOW(0xAF, 0x61, int)
+
 static int vhost_kernel_call(struct vhost_dev *dev, unsigned long int request,
                              void *arg)
 {
@@ -172,6 +176,17 @@ static int vhost_kernel_get_vq_index(struct vhost_dev *dev, int idx)
     return idx - dev->vq_index;
 }
 
+static int vhost_kernel_vsock_set_guest_cid(struct vhost_dev *dev,
+                                            uint64_t guest_cid)
+{
+    return vhost_kernel_call(dev, VHOST_VSOCK_SET_GUEST_CID, &guest_cid);
+}
+
+static int vhost_kernel_vsock_set_running(struct vhost_dev *dev, int start)
+{
+    return vhost_kernel_call(dev, VHOST_VSOCK_SET_RUNNING, &start);
+}
+
 static const VhostOps kernel_ops = {
         .backend_type = VHOST_BACKEND_TYPE_KERNEL,
         .vhost_backend_init = vhost_kernel_init,
@@ -197,6 +212,8 @@ static const VhostOps kernel_ops = {
         .vhost_set_owner = vhost_kernel_set_owner,
         .vhost_reset_device = vhost_kernel_reset_device,
         .vhost_get_vq_index = vhost_kernel_get_vq_index,
+        .vhost_vsock_set_guest_cid = vhost_kernel_vsock_set_guest_cid,
+        .vhost_vsock_set_running = vhost_kernel_vsock_set_running,
 };
 
 int vhost_set_backend_type(struct vhost_dev *dev, VhostBackendType backend_type)
