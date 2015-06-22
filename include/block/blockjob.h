@@ -102,6 +102,9 @@ struct BlockJob {
      */
     bool ready;
 
+    /** Element of the list of block jobs */
+    QLIST_ENTRY(BlockJob) job_list;
+
     /** Status that is published by the query-block-jobs QMP API */
     BlockDeviceIoStatus iostatus;
 
@@ -123,6 +126,17 @@ struct BlockJob {
     /** The opaque value that is passed to the completion function.  */
     void *opaque;
 };
+
+/**
+ * block_job_next:
+ * @job: A block job, or %NULL.
+ *
+ * Get the next element from the list of block jobs after @job, or the
+ * first one if @job is %NULL.
+ *
+ * Returns the requested job, or %NULL if there are no more jobs left.
+ */
+BlockJob *block_job_next(BlockJob *job);
 
 /**
  * block_job_create:

@@ -36,6 +36,16 @@
 #include "qemu/timer.h"
 #include "qapi-event.h"
 
+static QLIST_HEAD(, BlockJob) block_jobs = QLIST_HEAD_INITIALIZER(block_jobs);
+
+BlockJob *block_job_next(BlockJob *job)
+{
+    if (!job) {
+        return QLIST_FIRST(&block_jobs);
+    }
+    return QLIST_NEXT(job, job_list);
+}
+
 void *block_job_create(const BlockJobDriver *driver, BlockDriverState *bs,
                        int64_t speed, BlockCompletionFunc *cb,
                        void *opaque, Error **errp)
@@ -74,6 +84,8 @@ void *block_job_create(const BlockJobDriver *driver, BlockDriverState *bs,
             return NULL;
         }
     }
+
+    QLIST_INSERT_HEAD(&block_jobs, job, job_list);
     return job;
 }
 
@@ -86,6 +98,7 @@ void block_job_completed(BlockJob *job, int ret)
     bs->job = NULL;
     bdrv_op_unblock_all(bs, job->blocker);
     error_free(job->blocker);
+    QLIST_REMOVE(job, job_list);
     g_free(job);
 }
 

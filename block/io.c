@@ -272,16 +272,19 @@ void bdrv_drain_all(void)
     /* Always run first iteration so any pending completion BHs run */
     bool busy = true;
     BlockDriverState *bs = NULL;
+    BlockJob *job = NULL;
     GSList *aio_ctxs = NULL, *ctx;
+
+    while ((job = block_job_next(job))) {
+        AioContext *aio_context = bdrv_get_aio_context(job->bs);
+
+        aio_context_acquire(aio_context);
+        block_job_pause(job);
+        aio_context_release(aio_context);
+    }
 
     while ((bs = bdrv_next(bs))) {
         AioContext *aio_context = bdrv_get_aio_context(bs);
-
-        aio_context_acquire(aio_context);
-        if (bs->job) {
-            block_job_pause(bs->job);
-        }
-        aio_context_release(aio_context);
 
         if (!aio_ctxs || !g_slist_find(aio_ctxs, aio_context)) {
             aio_ctxs = g_slist_prepend(aio_ctxs, aio_context);
@@ -310,14 +313,11 @@ void bdrv_drain_all(void)
         }
     }
 
-    bs = NULL;
-    while ((bs = bdrv_next(bs))) {
-        AioContext *aio_context = bdrv_get_aio_context(bs);
+    while ((job = block_job_next(job))) {
+        AioContext *aio_context = bdrv_get_aio_context(job->bs);
 
         aio_context_acquire(aio_context);
-        if (bs->job) {
-            block_job_resume(bs->job);
-        }
+        block_job_resume(job);
         aio_context_release(aio_context);
     }
     g_slist_free(aio_ctxs);

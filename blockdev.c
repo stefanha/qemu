@@ -3102,21 +3102,18 @@ fail:
 BlockJobInfoList *qmp_query_block_jobs(Error **errp)
 {
     BlockJobInfoList *head = NULL, **p_next = &head;
-    BlockDriverState *bs;
+    BlockJob *job;
 
-    for (bs = bdrv_next(NULL); bs; bs = bdrv_next(bs)) {
-        AioContext *aio_context = bdrv_get_aio_context(bs);
+    for (job = block_job_next(NULL); job; job = block_job_next(job)) {
+        BlockJobInfoList *elem = g_new0(BlockJobInfoList, 1);
+        AioContext *aio_context = bdrv_get_aio_context(job->bs);
 
         aio_context_acquire(aio_context);
-
-        if (bs->job) {
-            BlockJobInfoList *elem = g_new0(BlockJobInfoList, 1);
-            elem->value = block_job_query(bs->job);
-            *p_next = elem;
-            p_next = &elem->next;
-        }
-
+        elem->value = block_job_query(job);
         aio_context_release(aio_context);
+
+        *p_next = elem;
+        p_next = &elem->next;
     }
 
     return head;
