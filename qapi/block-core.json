@@ -568,7 +568,7 @@
 #
 # @type: the job type ('stream' for image streaming)
 #
-# @device: the block device name
+# @device: the block device name, or node name if not present
 #
 # @len: the maximum progress value
 #
@@ -1190,7 +1190,7 @@
 #
 # Throttling can be disabled by setting the speed to 0.
 #
-# @device: the device name
+# @device: the device or node name of the owner of the block job.
 #
 # @speed:  the maximum speed, in bytes per second, or 0 for unlimited.
 #          Defaults to 0.
@@ -1221,7 +1221,7 @@
 # operation can be started at a later time to finish copying all data from the
 # backing file.
 #
-# @device: the device name
+# @device: the device or node name of the owner of the block job.
 #
 # @force: #optional whether to allow cancellation of a paused job (default
 #         false).  Since 1.3.
@@ -1247,7 +1247,7 @@
 # the operation is actually paused.  Cancelling a paused job automatically
 # resumes it.
 #
-# @device: the device name
+# @device: the device or node name of the owner of the block job.
 #
 # Returns: Nothing on success
 #          If no background operation is active on this device, DeviceNotActive
@@ -1267,7 +1267,7 @@
 #
 # This command also clears the error status of the job.
 #
-# @device: the device name
+# @device: the device or node name of the owner of the block job.
 #
 # Returns: Nothing on success
 #          If no background operation is active on this device, DeviceNotActive
@@ -1293,7 +1293,7 @@
 #
 # A cancelled or paused job cannot be completed.
 #
-# @device: the device name
+# @device: the device or node name of the owner of the block job.
 #
 # Returns: Nothing on success
 #          If no background operation is active on this device, DeviceNotActive
@@ -1951,7 +1951,7 @@
 #
 # @type: job type
 #
-# @device: device name
+# @device: device name, or node name if not present
 #
 # @len: maximum progress value
 #
@@ -1982,7 +1982,7 @@
 #
 # @type: job type
 #
-# @device: device name
+# @device: device name, or node name if not present
 #
 # @len: maximum progress value
 #
@@ -2005,7 +2005,7 @@
 #
 # Emitted when a block job encounters an error
 #
-# @device: device name
+# @device: device name, or node name if not present
 #
 # @operation: I/O operation
 #
@@ -2025,7 +2025,7 @@
 #
 # @type: job type
 #
-# @device: device name
+# @device: device name, or node name if not present
 #
 # @len: maximum progress value
 #

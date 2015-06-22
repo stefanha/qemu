@@ -599,7 +599,8 @@ static void mirror_complete(BlockJob *job, Error **errp)
         return;
     }
     if (!s->synced) {
-        error_setg(errp, QERR_BLOCK_JOB_NOT_READY,
+        error_setg(errp,
+                   "The active block job for device '%s' cannot be completed",
                    bdrv_get_device_name(job->bs));
         return;
     }

@@ -90,7 +90,7 @@ Data:
 
 - "type":     Job type (json-string; "stream" for image streaming
                                      "commit" for block commit)
-- "device":   Device name (json-string)
+- "device":   Device name, or node name if not present (json-string)
 - "len":      Maximum progress value (json-int)
 - "offset":   Current progress value (json-int)
               On success this is equal to len.
@@ -114,7 +114,7 @@ Data:
 
 - "type":     Job type (json-string; "stream" for image streaming
                                      "commit" for block commit)
-- "device":   Device name (json-string)
+- "device":   Device name, or node name if not present (json-string)
 - "len":      Maximum progress value (json-int)
 - "offset":   Current progress value (json-int)
               On success this is equal to len.
@@ -141,7 +141,7 @@ Emitted when a block job encounters an error.
 
 Data:
 
-- "device": device name (json-string)
+- "device": device name, or node name if not present (json-string)
 - "operation": I/O operation (json-string, "read" or "write")
 - "action": action that has been taken, it's one of the following (json-string):
     "ignore": error has been ignored, the job may fail later
@@ -165,7 +165,7 @@ Data:
 
 - "type":     Job type (json-string; "stream" for image streaming
                                      "commit" for block commit)
-- "device":   Device name (json-string)
+- "device":   Device name, or node name if not present (json-string)
 - "len":      Maximum progress value (json-int)
 - "offset":   Current progress value (json-int)
               On success this is equal to len.

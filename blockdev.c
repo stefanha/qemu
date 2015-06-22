@@ -2841,32 +2841,32 @@ out:
     aio_context_release(aio_context);
 }
 
-/* Get the block job for a given device name and acquire its AioContext */
-static BlockJob *find_block_job(const char *device, AioContext **aio_context,
+/* Get the block job for a given device or node name
+ * and acquire its AioContext */
+static BlockJob *find_block_job(const char *device_or_node,
+                                AioContext **aio_context,
                                 Error **errp)
 {
-    BlockBackend *blk;
     BlockDriverState *bs;
 
-    blk = blk_by_name(device);
-    if (!blk) {
+    bs = bdrv_lookup_bs(device_or_node, device_or_node, errp);
+    if (!bs) {
         goto notfound;
     }
-    bs = blk_bs(blk);
 
     *aio_context = bdrv_get_aio_context(bs);
     aio_context_acquire(*aio_context);
 
     if (!bs->job) {
         aio_context_release(*aio_context);
+        error_set(errp, ERROR_CLASS_DEVICE_NOT_ACTIVE,
+              "No active block job on node '%s'", device_or_node);
         goto notfound;
     }
 
     return bs->job;
 
 notfound:
-    error_set(errp, ERROR_CLASS_DEVICE_NOT_ACTIVE,
-              "No active block job on device '%s'", device);
     *aio_context = NULL;
     return NULL;
 }
