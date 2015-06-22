@@ -34,6 +34,8 @@ typedef struct StreamBlockJob {
     BlockDriverState *base;
     BlockdevOnError on_error;
     char *backing_file_str;
+    int bs_flags;
+    Error *blocker;
 } StreamBlockJob;
 
 static int coroutine_fn stream_populate(BlockDriverState *bs,
@@ -90,6 +92,13 @@ static void stream_complete(BlockJob *job, void *opaque)
     StreamBlockJob *s = container_of(job, StreamBlockJob, common);
     StreamCompleteData *data = opaque;
     BlockDriverState *base = s->base;
+    BlockDriverState *bs;
+
+    /* Remove all blockers set in stream_start() */
+    for (bs = job->bs->backing_hd; bs && bs != s->base; bs = bs->backing_hd) {
+        bdrv_op_unblock_all(bs, s->blocker);
+    }
+    error_free(s->blocker);
 
     if (!block_job_is_cancelled(&s->common) && data->reached_end &&
         data->ret == 0) {
@@ -102,6 +111,11 @@ static void stream_complete(BlockJob *job, void *opaque)
         }
         data->ret = bdrv_change_backing_file(job->bs, base_id, base_fmt);
         close_unused_images(job->bs, base, base_id);
+    }
+
+    /* Reopen the image back in read-only mode if necessary */
+    if (s->bs_flags != bdrv_get_flags(job->bs)) {
+        bdrv_reopen(job->bs, s->bs_flags, NULL);
     }
 
     g_free(s->backing_file_str);
@@ -247,7 +261,9 @@ void stream_start(BlockDriverState *bs, BlockDriverState *base,
                   BlockCompletionFunc *cb,
                   void *opaque, Error **errp)
 {
+    BlockDriverState *iter;
     StreamBlockJob *s;
+    int orig_bs_flags;
 
     if ((on_error == BLOCKDEV_ON_ERROR_STOP ||
          on_error == BLOCKDEV_ON_ERROR_ENOSPC) &&
@@ -256,13 +272,30 @@ void stream_start(BlockDriverState *bs, BlockDriverState *base,
         return;
     }
 
+    /* Make sure that the image is opened in read-write mode */
+    orig_bs_flags = bdrv_get_flags(bs);
+    if (!(orig_bs_flags & BDRV_O_RDWR)) {
+        if (bdrv_reopen(bs, orig_bs_flags | BDRV_O_RDWR, errp) != 0) {
+            return;
+        }
+    }
+
     s = block_job_create(&stream_job_driver, bs, speed, cb, opaque, errp);
     if (!s) {
         return;
     }
 
+    /* Block all intermediate nodes between bs and base, because they
+     * will disappear from the chain after this operation */
+    error_setg(&s->blocker, "blocked by the block-stream operation in '%s'",
+               bdrv_get_device_or_node_name(bs));
+    for (iter = bs->backing_hd; iter && iter != base; iter = iter->backing_hd) {
+        bdrv_op_block_all(iter, s->blocker);
+    }
+
     s->base = base;
     s->backing_file_str = g_strdup(backing_file_str);
+    s->bs_flags = orig_bs_flags;
 
     s->on_error = on_error;
     s->common.co = qemu_coroutine_create(stream_run);
