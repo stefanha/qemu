@@ -1139,6 +1139,10 @@
 # with query-block-jobs.  The operation can be stopped before it has completed
 # using the block-job-cancel command.
 #
+# The node that receives the data is called the top image, can be located
+# in any part of the whole chain and can be specified using its device
+# or node name.
+#
 # If a base file is specified then sectors are not copied from that base file and
 # its backing chain.  When streaming completes the image file will have the base
 # file as its backing file.  This can be used to stream a subset of the backing
@@ -1147,12 +1151,12 @@
 # On successful completion the image file is updated to drop the backing file
 # and the BLOCK_JOB_COMPLETED event is emitted.
 #
-# @device: the device name
+# @device: the device or node name of the top image
 #
 # @base:   #optional the common backing file name
 #
-# @backing-file: #optional The backing file string to write into the active
-#                          layer. This filename is not validated.
+# @backing-file: #optional The backing file string to write into the top
+#                          image. This filename is not validated.
 #
 #                          If a pathname string is such that it cannot be
 #                          resolved by QEMU, that means that subsequent QMP or

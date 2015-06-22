@@ -2286,8 +2286,7 @@ void qmp_block_stream(const char *device,
                       bool has_on_error, BlockdevOnError on_error,
                       Error **errp)
 {
-    BlockBackend *blk;
-    BlockDriverState *bs;
+    BlockDriverState *bs, *iter;
     BlockDriverState *base_bs = NULL;
     AioContext *aio_context;
     Error *local_err = NULL;
@@ -2297,20 +2296,13 @@ void qmp_block_stream(const char *device,
         on_error = BLOCKDEV_ON_ERROR_REPORT;
     }
 
-    blk = blk_by_name(device);
-    if (!blk) {
-        error_set(errp, ERROR_CLASS_DEVICE_NOT_FOUND,
-                  "Device '%s' not found", device);
+    bs = bdrv_lookup_bs(device, device, errp);
+    if (!bs) {
         return;
     }
-    bs = blk_bs(blk);
 
     aio_context = bdrv_get_aio_context(bs);
     aio_context_acquire(aio_context);
-
-    if (bdrv_op_is_blocked(bs, BLOCK_OP_TYPE_STREAM, errp)) {
-        goto out;
-    }
 
     if (has_base) {
         base_bs = bdrv_find_backing_image(bs, base);
@@ -2320,6 +2312,13 @@ void qmp_block_stream(const char *device,
         }
         assert(bdrv_get_aio_context(base_bs) == aio_context);
         base_name = base;
+    }
+
+    /* Check for op blockers in the whole chain between bs and base */
+    for (iter = bs; iter && iter != base_bs; iter = iter->backing_hd) {
+        if (bdrv_op_is_blocked(iter, BLOCK_OP_TYPE_STREAM, errp)) {
+            goto out;
+        }
     }
 
     /* if we are streaming the entire chain, the result will have no backing
