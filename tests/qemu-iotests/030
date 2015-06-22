@@ -225,6 +225,33 @@ class TestParallelOps(iotests.QMPTestCase):
                              qemu_io('-f', iotests.imgfmt, '-c', 'map', self.imgs[i-1]),
                              'image file map does not match backing file after streaming')
 
+    # Test that it's not possible to perform two block-stream
+    # operations if there are nodes involved in both.
+    def test_stream_overlapping(self):
+        self.assert_no_active_block_jobs()
+
+        # Set a speed limit to make sure that this job blocks the rest
+        result = self.vm.qmp('block-stream', device='node4', base=self.imgs[0], speed=32768)
+        self.assert_qmp(result, 'return', {})
+
+        result = self.vm.qmp('block-stream', device='node5', base=self.imgs[1])
+        self.assert_qmp(result, 'error/class', 'GenericError')
+
+        result = self.vm.qmp('block-stream', device='node3', base=self.imgs[2])
+        self.assert_qmp(result, 'error/class', 'GenericError')
+
+        result = self.vm.qmp('block-stream', device='node4')
+        self.assert_qmp(result, 'error/class', 'GenericError')
+
+        # If node4 is the active node, the id of the block job is drive0
+        if self.num_imgs == 5:
+            self.wait_until_completed(drive='drive0')
+        else:
+            self.wait_until_completed(drive='node4')
+        self.assert_no_active_block_jobs()
+
+        self.vm.shutdown()
+
 class TestSmallerBackingFile(iotests.QMPTestCase):
     backing_len = 1 * 1024 * 1024 # MB
     image_len = 2 * backing_len
