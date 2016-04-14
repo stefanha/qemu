@@ -1,0 +1,48 @@
+[
+	{
+		"_description": [
+			"Accept a connection from a client"
+		],
+
+		"op": "sock-async-connect",
+		"sock_id": "client",
+		"dst_cid": "MY_CID",
+		"dst_port": 1234
+	},
+	{
+		"op": "receive",
+		"hdr": {
+			"src_cid": "PEER_CID",
+			"src_port": "SOCK_PORT_client",
+			"dst_cid": "MY_CID",
+			"dst_port": 1234,
+			"len": 0,
+			"type": "VIRTIO_VSOCK_TYPE_STREAM",
+			"op": "VIRTIO_VSOCK_OP_REQUEST",
+			"flags": 0,
+			"buf_alloc": 262144,
+			"fwd_cnt": 0
+		}
+	},
+	{
+		"op": "send",
+		"hdr": {
+			"src_cid": "MY_CID",
+			"src_port": 1234,
+			"dst_cid": "PEER_CID",
+			"dst_port": "SOCK_PORT_client",
+			"len": 0,
+			"type": "VIRTIO_VSOCK_TYPE_STREAM",
+			"op": "VIRTIO_VSOCK_OP_RESPONSE",
+			"flags": 0,
+			"buf_alloc": 262144,
+			"fwd_cnt": 0
+		}
+	},
+	{
+		"op": "sock-poll",
+		"sock_id": "client",
+		"poll_events": "POLLOUT",
+		"poll_so_error": 0
+	}
+]

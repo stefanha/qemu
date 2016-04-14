@@ -1,0 +1,75 @@
+This directory contains JSON files that are interpreted by vhost-vsock-test.
+
+How to write test cases
+
+Each JSON file contains an array of test command objects.  During
+test execution each command runs in sequence until a failure occurs
+or the last command has completed successfully.
+
+Here is a small example:
+[
+	{
+		"_description": [
+			"This trivial test case sends a RST packet ",
+			"without waiting for a reply"
+		],
+
+		"op": "send",
+		"hdr": {
+			"src_cid": "MY_CID",
+			"src_port": 1024,
+			"dst_cid": "PEER_CID",
+			"dst_port": 1024,
+			"len": 0,
+			"type": "VIRTIO_VSOCK_TYPE_STREAM",
+			"op": "VIRTIO_VSOCK_OP_RST",
+			"flags": 0,
+			"buf_alloc": 65536,
+			"fwd_cnt": 0
+		}
+	}
+]
+
+By convention the first test command object has a "_description" member
+describing the purpose of the test case.  This value is not interpreted and is
+simply used for documentation.
+
+Test command objects
+
+Each test command contains the following members:
+
+ * "op" - "send", "receive"
+
+   The "send" operation transmits the packet described by the test command
+   object.
+
+   The "receive" operation waits for the next packet to be received and
+   compares against the packet described in the test command object.  The test
+   fails if the received packet does not match the expected packet.
+
+ * "hdr" - struct virtio_vsock_hdr packet header
+
+   * "src_cid" - source CID
+   * "src_port" - source port 32-bit unsigned integer
+   * "dst_cid" - destination CID
+   * "dst_port" - destination port 32-bit unsigned integer
+   * "len" - number of payload bytes (excluding header)
+   * "type" - "VIRTIO_VSOCK_TYPE_STREAM",
+              or a 16-bit unsigned integer
+   * "op" - "VIRTIO_VSOCK_OP_INVALID",
+            "VIRTIO_VSOCK_OP_REQUEST",
+            "VIRTIO_VSOCK_OP_RESPONSE",
+            "VIRTIO_VSOCK_OP_RST",
+            "VIRTIO_VSOCK_OP_SHUTDOWN",
+            "VIRTIO_VSOCK_OP_RW",
+            "VIRTIO_VSOCK_OP_CREDIT_UPDATE",
+            "VIRTIO_VSOCK_OP_CREDIT_REQUEST",
+            or a 16-bit unsigned integer
+   * "flags" - 32-bit unsigned integer
+   * "buf_alloc" - 32-bit unsigned integer
+   * "fwd_cnt" - 32-bit unsigned integer
+
+Note that CID values may be a 64-bit unsigned integer or one of:
+
+  * "MY_CID" - the local CID
+  * "PEER_CID" - the remote CID

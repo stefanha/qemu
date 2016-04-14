@@ -1,0 +1,37 @@
+[
+	{
+		"_description": [
+			"A REQUEST packet to a port without a listening ",
+			"socket results in a RST reply"
+		],
+
+		"op": "send",
+		"hdr": {
+			"src_cid": "MY_CID",
+			"src_port": 1024,
+			"dst_cid": "PEER_CID",
+			"dst_port": 1024,
+			"len": 0,
+			"type": "VIRTIO_VSOCK_TYPE_STREAM",
+			"op": "VIRTIO_VSOCK_OP_REQUEST",
+			"flags": 0,
+			"buf_alloc": 65536,
+			"fwd_cnt": 0
+		}
+	},
+	{
+		"op": "receive",
+		"hdr": {
+			"src_cid": "PEER_CID",
+			"src_port": 1024,
+			"dst_cid": "MY_CID",
+			"dst_port": 1024,
+			"len": 0,
+			"type": "VIRTIO_VSOCK_TYPE_STREAM",
+			"op": "VIRTIO_VSOCK_OP_RST",
+			"flags": 0,
+			"buf_alloc": 0,
+			"fwd_cnt": 0
+		}
+	}
+]
