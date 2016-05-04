@@ -144,6 +144,7 @@ void qvring_init(const QGuestAllocator *alloc, QVirtQueue *vq, uint64_t addr)
     vq->avail = vq->desc + vq->size * sizeof(struct vring_desc);
     vq->used = (uint64_t)((vq->avail + sizeof(uint16_t) * (3 + vq->size)
         + vq->align - 1) & ~(vq->align - 1));
+    vq->free_head = 0;
 
     for (i = 0; i < vq->size - 1; i++) {
         /* vq->desc[i].addr */
@@ -214,6 +215,8 @@ uint32_t qvirtqueue_add(QVirtQueue *vq, uint64_t data, uint32_t len, bool write,
                                                                     bool next)
 {
     uint16_t flags = 0;
+    uint16_t idx = vq->free_head;
+
     vq->num_free--;
 
     if (write) {
@@ -225,17 +228,22 @@ uint32_t qvirtqueue_add(QVirtQueue *vq, uint64_t data, uint32_t len, bool write,
     }
 
     /* vq->desc[vq->free_head].addr */
-    writeq(vq->desc + (16 * vq->free_head), data);
+    writeq(vq->desc + (16 * idx), data);
     /* vq->desc[vq->free_head].len */
-    writel(vq->desc + (16 * vq->free_head) + 8, len);
+    writel(vq->desc + (16 * idx) + 8, len);
     /* vq->desc[vq->free_head].flags */
-    writew(vq->desc + (16 * vq->free_head) + 12, flags);
+    writew(vq->desc + (16 * idx) + 12, flags);
 
-    return vq->free_head++; /* Return and increase, in this order */
+    vq->free_head = readw(vq->desc + sizeof(struct vring_desc) * idx +
+                          offsetof(struct vring_desc, next));
+
+    return idx;
 }
 
 uint32_t qvirtqueue_add_indirect(QVirtQueue *vq, QVRingIndirectDesc *indirect)
 {
+    uint16_t idx = vq->free_head;
+
     g_assert(vq->indirect);
     g_assert_cmpint(vq->size, >=, indirect->elem);
     g_assert_cmpint(indirect->index, ==, indirect->elem);
@@ -243,14 +251,17 @@ uint32_t qvirtqueue_add_indirect(QVirtQueue *vq, QVRingIndirectDesc *indirect)
     vq->num_free--;
 
     /* vq->desc[vq->free_head].addr */
-    writeq(vq->desc + (16 * vq->free_head), indirect->desc);
+    writeq(vq->desc + (16 * idx), indirect->desc);
     /* vq->desc[vq->free_head].len */
-    writel(vq->desc + (16 * vq->free_head) + 8,
+    writel(vq->desc + (16 * idx) + 8,
            sizeof(struct vring_desc) * indirect->elem);
     /* vq->desc[vq->free_head].flags */
-    writew(vq->desc + (16 * vq->free_head) + 12, VRING_DESC_F_INDIRECT);
+    writew(vq->desc + (16 * idx) + 12, VRING_DESC_F_INDIRECT);
 
-    return vq->free_head++; /* Return and increase, in this order */
+    vq->free_head = readw(vq->desc + sizeof(struct vring_desc) * idx +
+                          offsetof(struct vring_desc, next));
+
+    return idx;
 }
 
 void qvirtqueue_kick(const QVirtioBus *bus, QVirtioDevice *d, QVirtQueue *vq,
