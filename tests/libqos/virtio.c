@@ -136,6 +136,34 @@ void qvirtio_wait_config_isr(const QVirtioBus *bus, QVirtioDevice *d,
     }
 }
 
+/**
+ * qvirtio_wait_queue_buf:
+ * @bus: the virtio bus
+ * @d: the virtio device
+ * @vq: the virtqueue
+ *
+ * Wait for the next buffer and check that it has the given token.
+ *
+ * Returns: the number of bytes written by the device.
+ */
+unsigned int qvirtio_wait_queue_buf(const QVirtioBus *bus, QVirtioDevice *d,
+                                    QVirtQueue *vq, void *token,
+                                    gint64 timeout_us)
+{
+    unsigned int len;
+    void *actual_token;
+
+    actual_token = qvirtqueue_get_buf(vq, &len);
+    if (!actual_token) {
+        qvirtio_wait_queue_isr(bus, d, vq, timeout_us);
+        actual_token = qvirtqueue_get_buf(vq, &len);
+    }
+    g_assert(actual_token != NULL);
+    g_assert(actual_token == token);
+
+    return len;
+}
+
 void qvring_init(const QGuestAllocator *alloc, QVirtQueue *vq, uint64_t addr)
 {
     int i;

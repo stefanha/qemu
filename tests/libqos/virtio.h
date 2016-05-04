@@ -123,6 +123,9 @@ uint8_t qvirtio_wait_status_byte_no_isr(const QVirtioBus *bus,
                                         gint64 timeout_us);
 void qvirtio_wait_config_isr(const QVirtioBus *bus, QVirtioDevice *d,
                              gint64 timeout_us);
+unsigned int qvirtio_wait_queue_buf(const QVirtioBus *bus, QVirtioDevice *d,
+                                    QVirtQueue *vq, void *token,
+                                    gint64 timeout_us);
 QVirtQueue *qvirtqueue_setup(const QVirtioBus *bus, QVirtioDevice *d,
                                         QGuestAllocator *alloc, uint16_t index);
 void qvirtqueue_cleanup(const QVirtioBus *bus, QVirtQueue *vq,
