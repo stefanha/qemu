@@ -186,9 +186,9 @@ static void test_basic(const QVirtioBus *bus, QVirtioDevice *dev,
 
     g_free(req.data);
 
-    free_head = qvirtqueue_add(vq, req_addr, 16, false, true);
-    qvirtqueue_add(vq, req_addr + 16, 512, false, true);
-    qvirtqueue_add(vq, req_addr + 528, 1, true, false);
+    free_head = qvirtqueue_add(vq, req_addr, 16, false, true, NULL);
+    qvirtqueue_add(vq, req_addr + 16, 512, false, true, NULL);
+    qvirtqueue_add(vq, req_addr + 528, 1, true, false, NULL);
 
     qvirtqueue_kick(bus, dev, vq, free_head);
 
@@ -208,9 +208,9 @@ static void test_basic(const QVirtioBus *bus, QVirtioDevice *dev,
 
     g_free(req.data);
 
-    free_head = qvirtqueue_add(vq, req_addr, 16, false, true);
-    qvirtqueue_add(vq, req_addr + 16, 512, true, true);
-    qvirtqueue_add(vq, req_addr + 528, 1, true, false);
+    free_head = qvirtqueue_add(vq, req_addr, 16, false, true, NULL);
+    qvirtqueue_add(vq, req_addr + 16, 512, true, true, NULL);
+    qvirtqueue_add(vq, req_addr + 528, 1, true, false, NULL);
 
     qvirtqueue_kick(bus, dev, vq, free_head);
 
@@ -238,8 +238,8 @@ static void test_basic(const QVirtioBus *bus, QVirtioDevice *dev,
 
         g_free(req.data);
 
-        free_head = qvirtqueue_add(vq, req_addr, 528, false, true);
-        qvirtqueue_add(vq, req_addr + 528, 1, true, false);
+        free_head = qvirtqueue_add(vq, req_addr, 528, false, true, NULL);
+        qvirtqueue_add(vq, req_addr + 528, 1, true, false, NULL);
         qvirtqueue_kick(bus, dev, vq, free_head);
 
         qvirtio_wait_queue_isr(bus, dev, vq, QVIRTIO_BLK_TIMEOUT_US);
@@ -258,8 +258,8 @@ static void test_basic(const QVirtioBus *bus, QVirtioDevice *dev,
 
         g_free(req.data);
 
-        free_head = qvirtqueue_add(vq, req_addr, 16, false, true);
-        qvirtqueue_add(vq, req_addr + 16, 513, true, false);
+        free_head = qvirtqueue_add(vq, req_addr, 16, false, true, NULL);
+        qvirtqueue_add(vq, req_addr + 16, 513, true, false, NULL);
 
         qvirtqueue_kick(bus, dev, vq, free_head);
 
@@ -359,7 +359,7 @@ static void pci_indirect(void)
     indirect = qvring_indirect_desc_setup(&dev->vdev, alloc, 2);
     qvring_indirect_desc_add(indirect, req_addr, 528, false);
     qvring_indirect_desc_add(indirect, req_addr + 528, 1, true);
-    free_head = qvirtqueue_add_indirect(&vqpci->vq, indirect);
+    free_head = qvirtqueue_add_indirect(&vqpci->vq, indirect, NULL);
     qvirtqueue_kick(&qvirtio_pci, &dev->vdev, &vqpci->vq, free_head);
 
     qvirtio_wait_queue_isr(&qvirtio_pci, &dev->vdev, &vqpci->vq,
@@ -384,7 +384,7 @@ static void pci_indirect(void)
     indirect = qvring_indirect_desc_setup(&dev->vdev, alloc, 2);
     qvring_indirect_desc_add(indirect, req_addr, 16, false);
     qvring_indirect_desc_add(indirect, req_addr + 16, 513, true);
-    free_head = qvirtqueue_add_indirect(&vqpci->vq, indirect);
+    free_head = qvirtqueue_add_indirect(&vqpci->vq, indirect, NULL);
     qvirtqueue_kick(&qvirtio_pci, &dev->vdev, &vqpci->vq, free_head);
 
     qvirtio_wait_queue_isr(&qvirtio_pci, &dev->vdev, &vqpci->vq,
@@ -508,9 +508,9 @@ static void pci_msix(void)
 
     g_free(req.data);
 
-    free_head = qvirtqueue_add(&vqpci->vq, req_addr, 16, false, true);
-    qvirtqueue_add(&vqpci->vq, req_addr + 16, 512, false, true);
-    qvirtqueue_add(&vqpci->vq, req_addr + 528, 1, true, false);
+    free_head = qvirtqueue_add(&vqpci->vq, req_addr, 16, false, true, NULL);
+    qvirtqueue_add(&vqpci->vq, req_addr + 16, 512, false, true, NULL);
+    qvirtqueue_add(&vqpci->vq, req_addr + 528, 1, true, false, NULL);
     qvirtqueue_kick(&qvirtio_pci, &dev->vdev, &vqpci->vq, free_head);
 
     qvirtio_wait_queue_isr(&qvirtio_pci, &dev->vdev, &vqpci->vq,
@@ -531,9 +531,9 @@ static void pci_msix(void)
 
     g_free(req.data);
 
-    free_head = qvirtqueue_add(&vqpci->vq, req_addr, 16, false, true);
-    qvirtqueue_add(&vqpci->vq, req_addr + 16, 512, true, true);
-    qvirtqueue_add(&vqpci->vq, req_addr + 528, 1, true, false);
+    free_head = qvirtqueue_add(&vqpci->vq, req_addr, 16, false, true, NULL);
+    qvirtqueue_add(&vqpci->vq, req_addr + 16, 512, true, true, NULL);
+    qvirtqueue_add(&vqpci->vq, req_addr + 528, 1, true, false, NULL);
 
     qvirtqueue_kick(&qvirtio_pci, &dev->vdev, &vqpci->vq, free_head);
 
@@ -615,9 +615,9 @@ static void pci_idx(void)
 
     g_free(req.data);
 
-    free_head = qvirtqueue_add(&vqpci->vq, req_addr, 16, false, true);
-    qvirtqueue_add(&vqpci->vq, req_addr + 16, 512, false, true);
-    qvirtqueue_add(&vqpci->vq, req_addr + 528, 1, true, false);
+    free_head = qvirtqueue_add(&vqpci->vq, req_addr, 16, false, true, NULL);
+    qvirtqueue_add(&vqpci->vq, req_addr + 16, 512, false, true, NULL);
+    qvirtqueue_add(&vqpci->vq, req_addr + 528, 1, true, false, NULL);
     qvirtqueue_kick(&qvirtio_pci, &dev->vdev, &vqpci->vq, free_head);
 
     qvirtio_wait_queue_isr(&qvirtio_pci, &dev->vdev, &vqpci->vq,
@@ -636,9 +636,9 @@ static void pci_idx(void)
 
     /* Notify after processing the third request */
     qvirtqueue_set_used_event(&vqpci->vq, 2);
-    free_head = qvirtqueue_add(&vqpci->vq, req_addr, 16, false, true);
-    qvirtqueue_add(&vqpci->vq, req_addr + 16, 512, false, true);
-    qvirtqueue_add(&vqpci->vq, req_addr + 528, 1, true, false);
+    free_head = qvirtqueue_add(&vqpci->vq, req_addr, 16, false, true, NULL);
+    qvirtqueue_add(&vqpci->vq, req_addr + 16, 512, false, true, NULL);
+    qvirtqueue_add(&vqpci->vq, req_addr + 528, 1, true, false, NULL);
     qvirtqueue_kick(&qvirtio_pci, &dev->vdev, &vqpci->vq, free_head);
 
     /* No notification expected */
@@ -659,9 +659,9 @@ static void pci_idx(void)
 
     g_free(req.data);
 
-    free_head = qvirtqueue_add(&vqpci->vq, req_addr, 16, false, true);
-    qvirtqueue_add(&vqpci->vq, req_addr + 16, 512, true, true);
-    qvirtqueue_add(&vqpci->vq, req_addr + 528, 1, true, false);
+    free_head = qvirtqueue_add(&vqpci->vq, req_addr, 16, false, true, NULL);
+    qvirtqueue_add(&vqpci->vq, req_addr + 16, 512, true, true, NULL);
+    qvirtqueue_add(&vqpci->vq, req_addr + 528, 1, true, false, NULL);
 
     qvirtqueue_kick(&qvirtio_pci, &dev->vdev, &vqpci->vq, free_head);
 

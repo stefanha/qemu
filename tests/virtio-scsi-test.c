@@ -102,20 +102,20 @@ static uint8_t virtio_scsi_do_command(QVirtIOSCSI *vs, const uint8_t *cdb,
 
     /* Add request header */
     req_addr = qvirtio_scsi_alloc(vs, sizeof(req), &req);
-    free_head = qvirtqueue_add(vq, req_addr, sizeof(req), false, true);
+    free_head = qvirtqueue_add(vq, req_addr, sizeof(req), false, true, NULL);
 
     if (data_out_len) {
         data_out_addr = qvirtio_scsi_alloc(vs, data_out_len, data_out);
-        qvirtqueue_add(vq, data_out_addr, data_out_len, false, true);
+        qvirtqueue_add(vq, data_out_addr, data_out_len, false, true, NULL);
     }
 
     /* Add response header */
     resp_addr = qvirtio_scsi_alloc(vs, sizeof(resp), &resp);
-    qvirtqueue_add(vq, resp_addr, sizeof(resp), true, !!data_in_len);
+    qvirtqueue_add(vq, resp_addr, sizeof(resp), true, !!data_in_len, NULL);
 
     if (data_in_len) {
         data_in_addr = qvirtio_scsi_alloc(vs, data_in_len, data_in);
-        qvirtqueue_add(vq, data_in_addr, data_in_len, true, false);
+        qvirtqueue_add(vq, data_in_addr, data_in_len, true, false, NULL);
     }
 
     qvirtqueue_kick(&qvirtio_pci, vs->dev, vq, free_head);

@@ -100,7 +100,7 @@ static void rx_test(const QVirtioBus *bus, QVirtioDevice *dev,
 
     req_addr = guest_alloc(alloc, 64);
 
-    free_head = qvirtqueue_add(vq, req_addr, 64, true, false);
+    free_head = qvirtqueue_add(vq, req_addr, 64, true, false, NULL);
     qvirtqueue_kick(bus, dev, vq, free_head);
 
     ret = iov_send(socket, iov, 2, 0, sizeof(len) + sizeof(test));
@@ -126,7 +126,7 @@ static void tx_test(const QVirtioBus *bus, QVirtioDevice *dev,
     req_addr = guest_alloc(alloc, 64);
     memwrite(req_addr + VNET_HDR_SIZE, "TEST", 4);
 
-    free_head = qvirtqueue_add(vq, req_addr, 64, false, false);
+    free_head = qvirtqueue_add(vq, req_addr, 64, false, false, NULL);
     qvirtqueue_kick(bus, dev, vq, free_head);
 
     qvirtio_wait_queue_isr(bus, dev, vq, QVIRTIO_NET_TIMEOUT_US);
@@ -163,7 +163,7 @@ static void rx_stop_cont_test(const QVirtioBus *bus, QVirtioDevice *dev,
 
     req_addr = guest_alloc(alloc, 64);
 
-    free_head = qvirtqueue_add(vq, req_addr, 64, true, false);
+    free_head = qvirtqueue_add(vq, req_addr, 64, true, false, NULL);
     qvirtqueue_kick(bus, dev, vq, free_head);
 
     rsp = qmp("{ 'execute' : 'stop'}");

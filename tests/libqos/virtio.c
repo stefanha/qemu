@@ -152,6 +152,8 @@ void qvring_init(const QGuestAllocator *alloc, QVirtQueue *vq, uint64_t addr)
         writew(vq->desc + (16 * i), 0);
         /* vq->desc[i].next */
         writew(vq->desc + (16 * i) + 14, i + 1);
+
+        vq->tokens[i] = NULL;
     }
 
     /* vq->avail->flags */
@@ -213,7 +215,7 @@ void qvring_indirect_desc_add(QVRingIndirectDesc *indirect, uint64_t data,
 }
 
 uint32_t qvirtqueue_add(QVirtQueue *vq, uint64_t data, uint32_t len, bool write,
-                                                                    bool next)
+                        bool next, void *token)
 {
     uint16_t flags = 0;
     uint16_t idx = vq->free_head;
@@ -238,11 +240,13 @@ uint32_t qvirtqueue_add(QVirtQueue *vq, uint64_t data, uint32_t len, bool write,
 
     vq->free_head = readw(vq->desc + sizeof(struct vring_desc) * idx +
                           offsetof(struct vring_desc, next));
+    vq->tokens[idx] = token;
 
     return idx;
 }
 
-uint32_t qvirtqueue_add_indirect(QVirtQueue *vq, QVRingIndirectDesc *indirect)
+uint32_t qvirtqueue_add_indirect(QVirtQueue *vq, QVRingIndirectDesc *indirect,
+                                 void *token)
 {
     uint16_t idx = vq->free_head;
 
@@ -263,6 +267,7 @@ uint32_t qvirtqueue_add_indirect(QVirtQueue *vq, QVRingIndirectDesc *indirect)
 
     vq->free_head = readw(vq->desc + sizeof(struct vring_desc) * idx +
                           offsetof(struct vring_desc, next));
+    vq->tokens[idx] = token;
 
     return idx;
 }

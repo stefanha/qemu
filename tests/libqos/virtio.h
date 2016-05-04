@@ -15,6 +15,8 @@
 
 #define QVIRTIO_F_BAD_FEATURE           0x40000000
 
+#define QVIRTIO_QUEUE_MAX 1024 /* descriptors */
+
 typedef struct QVirtioDevice {
     /* Device type */
     uint16_t device_type;
@@ -31,6 +33,7 @@ typedef struct QVirtQueue {
     uint32_t align;
     bool indirect;
     bool event;
+    void *tokens[QVIRTIO_QUEUE_MAX];
 } QVirtQueue;
 
 typedef struct QVRingIndirectDesc {
@@ -130,8 +133,9 @@ QVRingIndirectDesc *qvring_indirect_desc_setup(QVirtioDevice *d,
 void qvring_indirect_desc_add(QVRingIndirectDesc *indirect, uint64_t data,
                                                     uint32_t len, bool write);
 uint32_t qvirtqueue_add(QVirtQueue *vq, uint64_t data, uint32_t len, bool write,
-                                                                    bool next);
-uint32_t qvirtqueue_add_indirect(QVirtQueue *vq, QVRingIndirectDesc *indirect);
+                        bool next, void *token);
+uint32_t qvirtqueue_add_indirect(QVirtQueue *vq, QVRingIndirectDesc *indirect,
+                                 void *token);
 void qvirtqueue_kick(const QVirtioBus *bus, QVirtioDevice *d, QVirtQueue *vq,
                                                             uint32_t free_head);
 
