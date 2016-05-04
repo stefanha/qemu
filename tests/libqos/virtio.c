@@ -145,6 +145,7 @@ void qvring_init(const QGuestAllocator *alloc, QVirtQueue *vq, uint64_t addr)
     vq->used = (uint64_t)((vq->avail + sizeof(uint16_t) * (3 + vq->size)
         + vq->align - 1) & ~(vq->align - 1));
     vq->free_head = 0;
+    vq->num_free = vq->size;
 
     for (i = 0; i < vq->size - 1; i++) {
         /* vq->desc[i].addr */
@@ -217,6 +218,7 @@ uint32_t qvirtqueue_add(QVirtQueue *vq, uint64_t data, uint32_t len, bool write,
     uint16_t flags = 0;
     uint16_t idx = vq->free_head;
 
+    g_assert_cmpint(vq->num_free, >=, 1);
     vq->num_free--;
 
     if (write) {
@@ -248,6 +250,7 @@ uint32_t qvirtqueue_add_indirect(QVirtQueue *vq, QVRingIndirectDesc *indirect)
     g_assert_cmpint(vq->size, >=, indirect->elem);
     g_assert_cmpint(indirect->index, ==, indirect->elem);
 
+    g_assert_cmpint(vq->num_free, >=, 1);
     vq->num_free--;
 
     /* vq->desc[vq->free_head].addr */
