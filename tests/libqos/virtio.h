@@ -27,6 +27,7 @@ typedef struct QVirtQueue {
     uint64_t avail; /* This points to a struct vring_avail */
     uint64_t used; /* This points to a struct vring_desc */
     uint16_t index;
+    uint16_t last_used_idx;
     uint32_t size;
     uint32_t free_head;
     uint32_t num_free;
@@ -136,6 +137,7 @@ uint32_t qvirtqueue_add(QVirtQueue *vq, uint64_t data, uint32_t len, bool write,
                         bool next, void *token);
 uint32_t qvirtqueue_add_indirect(QVirtQueue *vq, QVRingIndirectDesc *indirect,
                                  void *token);
+void *qvirtqueue_get_buf(QVirtQueue *vq, unsigned int *len);
 void qvirtqueue_kick(const QVirtioBus *bus, QVirtioDevice *d, QVirtQueue *vq,
                                                             uint32_t free_head);
 

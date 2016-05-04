@@ -146,6 +146,7 @@ void qvring_init(const QGuestAllocator *alloc, QVirtQueue *vq, uint64_t addr)
         + vq->align - 1) & ~(vq->align - 1));
     vq->free_head = 0;
     vq->num_free = vq->size;
+    vq->last_used_idx = 0;
 
     for (i = 0; i < vq->size - 1; i++) {
         /* vq->desc[i].addr */
@@ -270,6 +271,84 @@ uint32_t qvirtqueue_add_indirect(QVirtQueue *vq, QVRingIndirectDesc *indirect,
     vq->tokens[idx] = token;
 
     return idx;
+}
+
+static uint16_t get_desc_flags(QVirtQueue *vq, uint16_t idx)
+{
+    return readw(vq->desc + idx * sizeof(struct vring_desc) +
+                 offsetof(struct vring_desc, flags));
+}
+
+static uint16_t get_desc_next(QVirtQueue *vq, uint16_t idx)
+{
+    return readw(vq->desc + idx * sizeof(struct vring_desc) +
+                 offsetof(struct vring_desc, next));
+}
+
+static void set_desc_next(QVirtQueue *vq, uint16_t idx, uint16_t val)
+{
+    writew(vq->desc + idx * sizeof(struct vring_desc) +
+           offsetof(struct vring_desc, next), val);
+}
+
+static void free_descs(QVirtQueue *vq, uint16_t head)
+{
+    uint16_t idx = head;
+
+    for (idx = head;
+         get_desc_flags(vq, idx) & VRING_DESC_F_NEXT;
+         idx = get_desc_next(vq, idx)) {
+        vq->num_free++;
+    }
+    vq->num_free++; /* also count the final descriptor */
+
+    /* Add descriptors to free list */
+    set_desc_next(vq, idx, vq->free_head);
+    vq->free_head = head;
+}
+
+/**
+ * qvirtqueue_get_buf:
+ * @vq: the virtqueue
+ * @len: the number of bytes written by the device
+ *
+ * Get the next used buffer from a virtqueue.
+ *
+ * Returns: the token given to qvirtqueue_add()/qvirtqueue_add_indirect() or
+ * NULL if there are no more buffers.
+ */
+void *qvirtqueue_get_buf(QVirtQueue *vq, unsigned int *len)
+{
+    unsigned int head;
+    void *token;
+    /* vq->used->idx */
+    uint16_t idx = readw(vq->used + offsetof(struct vring_used, idx));
+
+    if (vq->last_used_idx == idx) {
+        return NULL;
+    }
+
+    idx = vq->last_used_idx % vq->size;
+
+    /* vq->used->ring[idx].id */
+    head = readl(vq->used + offsetof(struct vring_used, ring) +
+                 sizeof(struct vring_used_elem) * idx);
+    g_assert_cmpint(head, <, vq->size);
+
+    g_assert(vq->tokens[head]);
+    token = vq->tokens[head];
+    vq->tokens[head] = NULL;
+
+    free_descs(vq, head);
+
+    /* vq->used->ring[idx].len */
+    *len = readl(vq->used + offsetof(struct vring_used, ring) +
+                 sizeof(struct vring_used_elem) * idx +
+                 offsetof(struct vring_used_elem, len));
+
+    vq->last_used_idx++;
+
+    return token;
 }
 
 void qvirtqueue_kick(const QVirtioBus *bus, QVirtioDevice *d, QVirtQueue *vq,
