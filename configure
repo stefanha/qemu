@@ -323,6 +323,7 @@ vhost_net="no"
 vhost_scsi="no"
 vhost_vsock="no"
 vhost_user=""
+virtio_vhost_user=""
 kvm="no"
 hax="no"
 rdma=""
@@ -1299,6 +1300,10 @@ for opt do
           error_exit "vhost-user isn't available on win32"
       fi
   ;;
+  --disable-virtio-vhost-user) virtio_vhost_user="no"
+  ;;
+  --enable-virtio-vhost-user) virtio_vhost_user="yes"
+  ;;
   --disable-capstone) capstone="no"
   ;;
   --enable-capstone) capstone="yes"
@@ -1326,6 +1331,15 @@ if test "$vhost_user" = ""; then
         vhost_user="no"
     else
         vhost_user="yes"
+    fi
+fi
+
+# UNIX domain sockets are required
+if test "$virtio_vhost_user" = ""; then
+    if test "$mingw32" = "yes"; then
+        virtio_vhost_user="no"
+    else
+        virtio_vhost_user="yes"
     fi
 fi
 
@@ -5516,6 +5530,7 @@ echo "vhost-net support $vhost_net"
 echo "vhost-scsi support $vhost_scsi"
 echo "vhost-vsock support $vhost_vsock"
 echo "vhost-user support $vhost_user"
+echo "virtio-vhost-user support $virtio_vhost_user"
 echo "Trace backends    $trace_backends"
 if have_backend "simple"; then
 echo "Trace output file $trace_file-<pid>"
@@ -5953,6 +5968,9 @@ if test "$vhost_vsock" = "yes" ; then
 fi
 if test "$vhost_user" = "yes" ; then
   echo "CONFIG_VHOST_USER=y" >> $config_host_mak
+fi
+if test "$virtio_vhost_user" = "yes" ; then
+  echo "CONFIG_VIRTIO_VHOST_USER=y" >> $config_host_mak
 fi
 if test "$blobs" = "yes" ; then
   echo "INSTALL_BLOBS=yes" >> $config_host_mak

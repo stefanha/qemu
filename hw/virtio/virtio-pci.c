@@ -25,6 +25,7 @@
 #include "hw/virtio/virtio-scsi.h"
 #include "hw/virtio/virtio-balloon.h"
 #include "hw/virtio/virtio-input.h"
+#include "hw/virtio/virtio-vhost-user.h"
 #include "hw/pci/pci.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
@@ -2561,6 +2562,63 @@ static const TypeInfo virtio_host_pci_info = {
 };
 #endif
 
+/* virtio-vhost-user-pci */
+
+#ifdef CONFIG_VIRTIO_VHOST_USER
+static void virtio_vhost_user_pci_realize(VirtIOPCIProxy *vpci_dev,
+                                          Error **errp)
+{
+    VirtIOVhostUserPCI *vvup = VIRTIO_VHOST_USER_PCI(vpci_dev);
+    DeviceState *vdev = DEVICE(&vvup->vdev);
+    Error *err = NULL;
+
+    qdev_set_parent_bus(vdev, BUS(&vpci_dev->bus));
+    object_property_set_bool(OBJECT(vdev), true, "realized", &err);
+    if (err) {
+        error_propagate(errp, err);
+        return;
+    }
+}
+
+static Property virtio_vhost_user_pci_properties[] = {
+    DEFINE_PROP_UINT32("vectors", VirtIOPCIProxy, nvectors, 3),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
+static void virtio_vhost_user_pci_class_init(ObjectClass *klass, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(klass);
+    VirtioPCIClass *k = VIRTIO_PCI_CLASS(klass);
+    PCIDeviceClass *pcidev_k = PCI_DEVICE_CLASS(klass);
+
+    dc->props = virtio_vhost_user_pci_properties;
+    k->realize = virtio_vhost_user_pci_realize;
+    set_bit(DEVICE_CATEGORY_MISC, dc->categories);
+
+    pcidev_k->vendor_id = PCI_VENDOR_ID_REDHAT_QUMRANET;
+    pcidev_k->device_id = PCI_DEVICE_ID_VIRTIO_VHOST_USER;
+    pcidev_k->revision = VIRTIO_PCI_ABI_VERSION;
+    pcidev_k->class_id = PCI_CLASS_OTHERS;
+}
+
+static void virtio_vhost_user_pci_initfn(Object *obj)
+{
+    VirtIOVhostUserPCI *dev = VIRTIO_VHOST_USER_PCI(obj);
+
+    virtio_instance_init_common(obj, &dev->vdev, sizeof(dev->vdev),
+                                TYPE_VIRTIO_VHOST_USER);
+}
+
+static const TypeInfo virtio_vhost_user_pci_info = {
+    .name          = TYPE_VIRTIO_VHOST_USER_PCI,
+    .parent        = TYPE_VIRTIO_PCI,
+    .instance_size = sizeof(VirtIOVhostUserPCI),
+    .instance_init = virtio_vhost_user_pci_initfn,
+    .class_init    = virtio_vhost_user_pci_class_init,
+};
+#endif /* CONFIG_VIRTIO_VHOST_USER */
+
+
 /* virtio-pci-bus */
 
 static void virtio_pci_bus_new(VirtioBusState *bus, size_t bus_size,
@@ -2634,6 +2692,9 @@ static void virtio_pci_register_types(void)
 #endif
 #ifdef CONFIG_VHOST_VSOCK
     type_register_static(&vhost_vsock_pci_info);
+#endif
+#ifdef CONFIG_VIRTIO_VHOST_USER
+    type_register_static(&virtio_vhost_user_pci_info);
 #endif
 }
 

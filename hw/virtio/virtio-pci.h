@@ -37,6 +37,9 @@
 #ifdef CONFIG_VHOST_VSOCK
 #include "hw/virtio/vhost-vsock.h"
 #endif
+#ifdef CONFIG_VIRTIO_VHOST_USER
+#include "hw/virtio/virtio-vhost-user.h"
+#endif
 
 typedef struct VirtIOPCIProxy VirtIOPCIProxy;
 typedef struct VirtIOBlkPCI VirtIOBlkPCI;
@@ -53,6 +56,7 @@ typedef struct VirtIOInputHostPCI VirtIOInputHostPCI;
 typedef struct VirtIOGPUPCI VirtIOGPUPCI;
 typedef struct VHostVSockPCI VHostVSockPCI;
 typedef struct VirtIOCryptoPCI VirtIOCryptoPCI;
+typedef struct VirtIOVhostUserPCI VirtIOVhostUserPCI;
 
 /* virtio-pci-bus */
 
@@ -395,6 +399,23 @@ struct VirtIOCryptoPCI {
     VirtIOPCIProxy parent_obj;
     VirtIOCrypto vdev;
 };
+
+/*
+ * virtio-vhost-user-pci: This extends VirtioPCIProxy.
+ */
+
+#ifdef CONFIG_VIRTIO_VHOST_USER
+
+#define TYPE_VIRTIO_VHOST_USER_PCI "virtio-vhost-user-pci"
+#define VIRTIO_VHOST_USER_PCI(obj) \
+        OBJECT_CHECK(VirtIOVhostUserPCI, (obj), TYPE_VIRTIO_VHOST_USER_PCI)
+
+struct VirtIOVhostUserPCI {
+    VirtIOPCIProxy parent_obj;
+    VirtIOVhostUser vdev;
+};
+
+#endif /* CONFIG_VIRTIO_VHOST_USER */
 
 /* Virtio ABI version, if we increment this, we break the guest driver. */
 #define VIRTIO_PCI_ABI_VERSION          0
