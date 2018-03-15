@@ -152,11 +152,8 @@ void qemu_bh_schedule_idle(QEMUBH *bh)
     atomic_mb_set(&bh->scheduled, 1);
 }
 
-void qemu_bh_schedule(QEMUBH *bh)
+static bool qemu_bh_schedule_internal(QEMUBH *bh)
 {
-    AioContext *ctx;
-
-    ctx = bh->ctx;
     bh->idle = 0;
     /* The memory barrier implicit in atomic_xchg makes sure that:
      * 1. idle & any writes needed by the callback are done before the
@@ -164,7 +161,21 @@ void qemu_bh_schedule(QEMUBH *bh)
      * 2. ctx is loaded before scheduled is set and the callback has a chance
      *    to execute.
      */
-    if (atomic_xchg(&bh->scheduled, 1) == 0) {
+    return atomic_xchg(&bh->scheduled, 1) == 0;
+}
+
+void qemu_bh_schedule_nested(QEMUBH *bh)
+{
+    qemu_bh_schedule_internal(bh);
+}
+
+void qemu_bh_schedule(QEMUBH *bh)
+{
+    AioContext *ctx;
+
+    ctx = bh->ctx;
+
+    if (qemu_bh_schedule_internal(bh)) {
         aio_notify(ctx);
     }
 }

@@ -268,6 +268,32 @@ int aio_bh_poll(AioContext *ctx);
 void qemu_bh_schedule(QEMUBH *bh);
 
 /**
+ * qemu_bh_schedule_nested: Schedule a bottom half for nested event loops.
+ *
+ * Same as qemu_bh_schedule() but don't interrupt the event loop.  This is a
+ * performance optimization for cases where a BH is scheduled solely for the
+ * purpose of being run by nested event loops.  The interrupt is expensive and
+ * is not necessary for nested event loops.
+ *
+ * The typical use case is as follows:
+ *
+ *   static void process_work_bh(void)
+ *   {
+ *       qemu_bh_schedule_nested(bh); <-- reschedule ourselves
+ *       while (work) {
+ *           tmp = work;
+ *           work = next;
+ *           tmp->cb(); <-- may invoke nested event loop,
+ *                          which must process the remaining work
+ *       }
+ *       qemu_bh_cancel(bh);
+ *   }
+ *
+ * @bh: The bottom half to be scheduled.
+ */
+void qemu_bh_schedule_nested(QEMUBH *bh);
+
+/**
  * qemu_bh_cancel: Cancel execution of a bottom half.
  *
  * Canceling execution of a bottom half undoes the effect of calls to

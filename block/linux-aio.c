@@ -204,7 +204,7 @@ static void qemu_laio_process_completions(LinuxAioState *s)
     struct io_event *events;
 
     /* Reschedule so nested event loops see currently pending completions */
-    qemu_bh_schedule(s->completion_bh);
+    qemu_bh_schedule_nested(s->completion_bh);
 
     while ((s->event_max = io_getevents_advance_and_peek(s->ctx, &events,
                                                          s->event_idx))) {
