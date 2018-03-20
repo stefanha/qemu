@@ -253,9 +253,14 @@ static void qemu_laio_completion_cb(EventNotifier *e)
 {
     LinuxAioState *s = container_of(e, LinuxAioState, e);
 
-    if (event_notifier_test_and_clear(&s->e)) {
-        qemu_laio_process_completions_and_submit(s);
-    }
+    /* Process first, clear notifier afterwards to minimize latency.  If the
+     * notifier becomes readable after processing but before we clear it then
+     * we miss the notification.  This is fine because qemu_laio_poll_cb()
+     * notices that more processing is necessary even though the notifier isn't
+     * readable.
+     */
+    qemu_laio_process_completions_and_submit(s);
+    event_notifier_test_and_clear(&s->e);
 }
 
 static bool qemu_laio_poll_cb(void *opaque)
