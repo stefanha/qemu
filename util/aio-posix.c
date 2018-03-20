@@ -686,11 +686,11 @@ bool aio_poll(AioContext *ctx, bool blocking)
 
     npfd = 0;
 
-    progress |= aio_bh_poll(ctx);
-
     if (ret > 0) {
         progress |= aio_dispatch_handlers(ctx);
     }
+
+    progress |= aio_bh_poll(ctx);
 
     qemu_lockcnt_dec(&ctx->list_lock);
 
