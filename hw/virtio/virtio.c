@@ -2384,9 +2384,15 @@ EventNotifier *virtio_queue_get_guest_notifier(VirtQueue *vq)
 static void virtio_queue_host_notifier_aio_read(EventNotifier *n)
 {
     VirtQueue *vq = container_of(n, VirtQueue, host_notifier);
-    if (event_notifier_test_and_clear(n)) {
-        virtio_queue_notify_aio_vq(vq);
-    }
+
+    /* First process the vq and then clear the event notifier.
+     * virtio_queue_host_notifier_aio_poll() catches vq activity that slipped
+     * through between the end of vq processing and clearing the event
+     * notifier.  This order reduces vq latency slightly because clearing the
+     * event notifier takes time too.
+     */
+    virtio_queue_notify_aio_vq(vq);
+    event_notifier_test_and_clear(n);
 }
 
 static void virtio_queue_host_notifier_aio_poll_begin(EventNotifier *n)
