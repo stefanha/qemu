@@ -20,6 +20,7 @@
 #include "sysemu/sysemu.h"
 #include "qemu/log.h"
 #include "cpu.h"
+#include "crypto/random.h"
 
 #include "hw/arm/nrf51_soc.h"
 
@@ -44,6 +45,69 @@
 #define NRF51822_SRAM_SIZE      (16 * 1024)
 
 #define BASE_TO_IRQ(base) ((base >> 12) & 0x1F)
+
+static uint64_t clock_read(void *opaque, hwaddr addr, unsigned int size)
+{
+    qemu_log_mask(LOG_UNIMP, "%s: 0x%" HWADDR_PRIx " [%u]\n", __func__, addr, size);
+    return 1;
+}
+
+static void clock_write(void *opaque, hwaddr addr, uint64_t data, unsigned int size)
+{
+    qemu_log_mask(LOG_UNIMP, "%s: 0x%" HWADDR_PRIx " <- 0x%" PRIx64 " [%u]\n", __func__, addr, data, size);
+}
+
+
+static const MemoryRegionOps clock_ops = {
+    .read = clock_read,
+    .write = clock_write
+};
+
+static uint64_t nvmc_read(void *opaque, hwaddr addr, unsigned int size)
+{
+    qemu_log_mask(LOG_TRACE, "%s: 0x%" HWADDR_PRIx " [%u]\n", __func__, addr, size);
+    return 1;
+}
+
+static void nvmc_write(void *opaque, hwaddr addr, uint64_t data, unsigned int size)
+{
+    qemu_log_mask(LOG_TRACE, "%s: 0x%" HWADDR_PRIx " <- 0x%" PRIx64 " [%u]\n", __func__, addr, data, size);
+}
+
+
+static const MemoryRegionOps nvmc_ops = {
+    .read = nvmc_read,
+    .write = nvmc_write
+};
+
+static uint64_t rng_read(void *opaque, hwaddr addr, unsigned int size)
+{
+    uint64_t r = 0;
+
+    qemu_log_mask(LOG_UNIMP, "%s: 0x%" HWADDR_PRIx " [%u]\n", __func__, addr, size);
+
+    switch (addr) {
+    case 0x508:
+        qcrypto_random_bytes((uint8_t *)&r, 1, NULL);
+        break;
+    default:
+        r = 1;
+        break;
+    }
+    return r;
+}
+
+static void rng_write(void *opaque, hwaddr addr, uint64_t data, unsigned int size)
+{
+    qemu_log_mask(LOG_UNIMP, "%s: 0x%" HWADDR_PRIx " <- 0x%" PRIx64 " [%u]\n", __func__, addr, data, size);
+}
+
+
+static const MemoryRegionOps rng_ops = {
+    .read = rng_read,
+    .write = rng_write
+};
+
 
 static void nrf51_soc_realize(DeviceState *dev_soc, Error **errp)
 {
@@ -119,6 +183,15 @@ static void nrf51_soc_init(Object *obj)
                            TYPE_NRF51_UART);
     object_property_add_alias(obj, "serial0", OBJECT(&s->uart), "chardev",
                               &error_abort);
+
+    memory_region_init_io(&s->clock, NULL, &clock_ops, NULL, "nrf51_soc.clock", 0x1000);
+    memory_region_add_subregion_overlap(get_system_memory(), IOMEM_BASE, &s->clock, -1);
+
+    memory_region_init_io(&s->nvmc, NULL, &nvmc_ops, NULL, "nrf51_soc.nvmc", 0x1000);
+    memory_region_add_subregion_overlap(get_system_memory(), 0x4001E000, &s->nvmc, -1);
+
+    memory_region_init_io(&s->rng, NULL, &rng_ops, NULL, "nrf51_soc.rng", 0x1000);
+    memory_region_add_subregion_overlap(get_system_memory(), 0x4000D000, &s->rng, -1);
 }
 
 static Property nrf51_soc_properties[] = {
