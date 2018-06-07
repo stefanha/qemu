@@ -6,6 +6,9 @@
   See the file COPYING.LIB
 */
 
+#ifndef FUSE_I_H
+#define FUSE_I_H
+
 #include "fuse.h"
 #include "fuse_lowlevel.h"
 
@@ -116,3 +119,5 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 
 /* room needed in buffer to accommodate header */
 #define FUSE_BUFFER_HEADER_SIZE 0x1000
+
+#endif
