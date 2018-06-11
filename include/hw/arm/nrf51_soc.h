@@ -38,6 +38,8 @@ typedef struct NRF51State {
 
     MemoryRegion container;
 
+    MemoryRegion ficr;
+    MemoryRegion uicr;
     MemoryRegion clock;
     MemoryRegion nvmc;
     MemoryRegion rng;

@@ -30,6 +30,9 @@
 #define FICR_BASE       0x10000000
 #define FICR_SIZE       0x000000fc
 
+#define UICR_BASE       0x10001000
+#define UICR_SIZE       0x100
+
 #define FLASH_BASE      0x00000000
 #define SRAM_BASE       0x20000000
 
@@ -46,9 +49,117 @@
 
 #define BASE_TO_IRQ(base) ((base >> 12) & 0x1F)
 
+/*
+FICR Registers Assignments
+CODEPAGESIZE      0x010      [4,
+CODESIZE          0x014       5,
+CLENR0            0x028       10,
+PPFC              0x02C       11,
+NUMRAMBLOCK       0x034       13,
+SIZERAMBLOCKS     0x038       14,
+SIZERAMBLOCK[0]   0x038       14,
+SIZERAMBLOCK[1]   0x03C       15,
+SIZERAMBLOCK[2]   0x040       16,
+SIZERAMBLOCK[3]   0x044       17,
+CONFIGID          0x05C       23,
+DEVICEID[0]       0x060       24,
+DEVICEID[1]       0x064       25,
+ER[0]             0x080       32,
+ER[1]             0x084       33,
+ER[2]             0x088       34,
+ER[3]             0x08C       35,
+IR[0]             0x090       36,
+IR[1]             0x094       37,
+IR[2]             0x098       38,
+IR[3]             0x09C       39,
+DEVICEADDRTYPE    0x0A0       40,
+DEVICEADDR[0]     0x0A4       41,
+DEVICEADDR[1]     0x0A8       42,
+OVERRIDEEN        0x0AC       43,
+NRF_1MBIT[0]      0x0B0       44,
+NRF_1MBIT[1]      0x0B4       45,
+NRF_1MBIT[2]      0x0B8       46,
+NRF_1MBIT[3]      0x0BC       47,
+NRF_1MBIT[4]      0x0C0       48,
+BLE_1MBIT[0]      0x0EC       59,
+BLE_1MBIT[1]      0x0F0       60,
+BLE_1MBIT[2]      0x0F4       61,
+BLE_1MBIT[3]      0x0F8       62,
+BLE_1MBIT[4]      0x0FC       63]
+*/
+
+static const uint32_t ficr_content[64] = { 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0x00000400, 0x00000100, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000002,
+        0x00002000, 0x00002000, 0x00002000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000003, 0x12345678, 0x9ABCDEF1,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, };
+
+static uint64_t ficr_read(void *opaque, hwaddr offset, unsigned int size)
+{
+    qemu_log_mask(LOG_TRACE, "%s: 0x%" HWADDR_PRIx " [%u]\n",
+            __func__, offset, size);
+
+    if (offset > (ARRAY_SIZE(ficr_content) - size)) {
+        qemu_log_mask(LOG_GUEST_ERROR,
+                "%s: bad read offset 0x%" HWADDR_PRIx "\n", __func__, offset);
+        return 0;
+    }
+
+    return ficr_content[offset >> 2];
+}
+
+static const MemoryRegionOps ficr_ops = {
+    .read = ficr_read,
+    .impl.min_access_size = 4,
+    .impl.max_access_size = 4,
+    .impl.unaligned = false,
+};
+
+static const uint32_t uicr_content[64] = { 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, };
+
+static uint64_t uicr_read(void *opaque, hwaddr offset, unsigned int size)
+{
+    qemu_log_mask(LOG_TRACE, "%s: 0x%" HWADDR_PRIx " [%u]\n",
+            __func__, offset, size);
+
+    if (offset > (ARRAY_SIZE(uicr_content) - size)) {
+        qemu_log_mask(LOG_GUEST_ERROR,
+                "%s: bad read offset 0x%" HWADDR_PRIx "\n", __func__, offset);
+        return 0;
+    }
+
+    return uicr_content[offset >> 2];
+}
+
+static const MemoryRegionOps uicr_ops = {
+    .read = uicr_read,
+    .impl.min_access_size = 4,
+    .impl.max_access_size = 4,
+    .impl.unaligned = false,
+};
+
 static uint64_t clock_read(void *opaque, hwaddr addr, unsigned int size)
 {
-    qemu_log_mask(LOG_UNIMP, "%s: 0x%" HWADDR_PRIx " [%u]\n", __func__, addr, size);
+    qemu_log_mask(LOG_UNIMP, "%s: 0x%" HWADDR_PRIx " [%u]\n",
+            __func__, addr, size);
     return 1;
 }
 
@@ -108,7 +219,6 @@ static const MemoryRegionOps rng_ops = {
     .write = rng_write
 };
 
-
 static void nrf51_soc_realize(DeviceState *dev_soc, Error **errp)
 {
     NRF51State *s = NRF51_SOC(dev_soc);
@@ -149,6 +259,18 @@ static void nrf51_soc_realize(DeviceState *dev_soc, Error **errp)
     }
     memory_region_add_subregion(&s->container, SRAM_BASE, &s->sram);
 
+    /* FICR */
+    memory_region_init_io(&s->ficr, NULL, &ficr_ops, NULL, "nrf51_soc.ficr",
+            FICR_SIZE);
+    memory_region_set_readonly(&s->ficr, true);
+    memory_region_add_subregion_overlap(&s->container, FICR_BASE, &s->ficr, 0);
+
+    /* UICR */
+    memory_region_init_io(&s->uicr, NULL, &uicr_ops, NULL, "nrf51_soc.uicr",
+            UICR_SIZE);
+    memory_region_set_readonly(&s->uicr, true);
+    memory_region_add_subregion_overlap(&s->container, UICR_BASE, &s->uicr, 0);
+
     /* UART */
     object_property_set_bool(OBJECT(&s->uart), true, "realized", &err);
     if (err) {
@@ -162,7 +284,16 @@ static void nrf51_soc_realize(DeviceState *dev_soc, Error **errp)
                        BASE_TO_IRQ(UART_BASE)));
 
     create_unimplemented_device("nrf51_soc.io", IOMEM_BASE, IOMEM_SIZE);
-    create_unimplemented_device("nrf51_soc.ficr", FICR_BASE, FICR_SIZE);
+
+    memory_region_init_io(&s->clock, NULL, &clock_ops, NULL, "nrf51_soc.clock", 0x1000);
+    memory_region_add_subregion_overlap(&s->container, IOMEM_BASE, &s->clock, -1);
+
+    memory_region_init_io(&s->nvmc, NULL, &nvmc_ops, NULL, "nrf51_soc.nvmc", 0x1000);
+    memory_region_add_subregion_overlap(&s->container, 0x4001E000, &s->nvmc, -1);
+
+    memory_region_init_io(&s->rng, NULL, &rng_ops, NULL, "nrf51_soc.rng", 0x1000);
+    memory_region_add_subregion_overlap(&s->container, 0x4000D000, &s->rng, -1);
+
     create_unimplemented_device("nrf51_soc.private",
                                 PRIVATE_BASE, PRIVATE_SIZE);
 }
@@ -183,15 +314,6 @@ static void nrf51_soc_init(Object *obj)
                            TYPE_NRF51_UART);
     object_property_add_alias(obj, "serial0", OBJECT(&s->uart), "chardev",
                               &error_abort);
-
-    memory_region_init_io(&s->clock, NULL, &clock_ops, NULL, "nrf51_soc.clock", 0x1000);
-    memory_region_add_subregion_overlap(get_system_memory(), IOMEM_BASE, &s->clock, -1);
-
-    memory_region_init_io(&s->nvmc, NULL, &nvmc_ops, NULL, "nrf51_soc.nvmc", 0x1000);
-    memory_region_add_subregion_overlap(get_system_memory(), 0x4001E000, &s->nvmc, -1);
-
-    memory_region_init_io(&s->rng, NULL, &rng_ops, NULL, "nrf51_soc.rng", 0x1000);
-    memory_region_add_subregion_overlap(get_system_memory(), 0x4000D000, &s->rng, -1);
 }
 
 static Property nrf51_soc_properties[] = {
