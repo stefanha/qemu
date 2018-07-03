@@ -161,6 +161,7 @@ static void vuf_device_realize(DeviceState *dev, Error **errp)
 {
     VirtIODevice *vdev = VIRTIO_DEVICE(dev);
     VHostUserFS *fs = VHOST_USER_FS(dev);
+    void *cache_ptr;
     unsigned int i;
     size_t len;
     int ret;
@@ -199,6 +200,26 @@ static void vuf_device_realize(DeviceState *dev, Error **errp)
         error_setg(errp, "queue-size property must be %u or smaller",
                    VIRTQUEUE_MAX_SIZE);
         return;
+    }
+    if (fs->conf.cache_size &&
+        (!is_power_of_2(fs->conf.cache_size) ||
+          fs->conf.cache_size < sysconf(_SC_PAGESIZE))) {
+        error_setg(errp, "cache-size property must be a power of 2 "
+                         "no smaller than the page size");
+        return;
+    }
+    if (fs->conf.cache_size) {
+        /* Anonymous, private memory is not counted as overcommit */
+        cache_ptr = mmap(NULL, fs->conf.cache_size, PROT_NONE,
+                         MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+        if (cache_ptr == MAP_FAILED) {
+            error_setg(errp, "Unable to mmap blank cache");
+            return;
+        }
+
+        memory_region_init_ram_ptr(&fs->cache, OBJECT(vdev),
+                                   "virtio-fs-cache",
+                                   fs->conf.cache_size, cache_ptr);
     }
 
     if (!vhost_user_init(&fs->vhost_user, &fs->conf.chardev, errp)) {
@@ -264,6 +285,7 @@ static Property vuf_properties[] = {
                        conf.num_request_queues, 1),
     DEFINE_PROP_UINT16("queue-size", VHostUserFS, conf.queue_size, 128),
     DEFINE_PROP_STRING("vhostfd", VHostUserFS, conf.vhostfd),
+    DEFINE_PROP_SIZE("cache-size", VHostUserFS, conf.cache_size, 1ull << 30),
     DEFINE_PROP_END_OF_LIST(),
 };
 
