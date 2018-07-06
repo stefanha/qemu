@@ -1501,6 +1501,41 @@ static void do_copy_file_range(fuse_req_t req, fuse_ino_t nodeid_in, const void 
 		fuse_reply_err(req, ENOSYS);
 }
 
+static void do_setupmapping(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_setupmapping_in *arg = (struct fuse_setupmapping_in *) inarg;
+        struct fuse_file_info fi;
+
+        memset(&fi, 0, sizeof(fi));
+	fi.fh = arg->fh;
+
+        // TODO: Need to come up with a better definition of flags here; it can't
+        // be the kernel view of the flags, since that's abstracted from the client
+        // similarly, it's not the vhost-user set
+        // for now just use O_ flags
+        uint64_t genflags;
+
+	genflags = O_RDONLY;
+	if (arg->flags & FUSE_SETUPMAPPING_FLAG_WRITE)
+		genflags = O_RDWR;
+
+	if (req->se->op.setupmapping)
+		req->se->op.setupmapping(req, nodeid, arg->foffset, arg->len,
+                                         arg->moffset, genflags, &fi);
+	else
+		fuse_reply_err(req, ENOSYS);
+}
+
+static void do_removemapping(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_removemapping_in *arg = (struct fuse_removemapping_in *) inarg;
+
+	if (req->se->op.removemapping)
+		req->se->op.removemapping(req, req->se, nodeid, arg->count, one);
+	else
+		fuse_reply_err(req, ENOSYS);
+}
+
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
@@ -1960,6 +1995,8 @@ static struct {
 	[FUSE_READDIRPLUS] = { do_readdirplus,	"READDIRPLUS"},
 	[FUSE_RENAME2]     = { do_rename2,      "RENAME2"    },
 	[FUSE_COPY_FILE_RANGE] = { do_copy_file_range, "COPY_FILE_RANGE" },
+	[FUSE_SETUPMAPPING]  = { do_setupmapping, "SETUPMAPPING" },
+	[FUSE_REMOVEMAPPING] = { do_removemapping, "REMOVEMAPPING" },
 };
 
 #define FUSE_MAXOP (sizeof(fuse_ll_ops) / sizeof(fuse_ll_ops[0]))
