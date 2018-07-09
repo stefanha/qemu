@@ -2344,8 +2344,27 @@ static void lo_setupmapping(fuse_req_t req, fuse_ino_t ino, uint64_t foffset,
 			    uint64_t len, uint64_t moffset, uint64_t flags,
 			    struct fuse_file_info *fi)
 {
-	// TODO
-	fuse_reply_err(req, ENOSYS);
+	int ret = 0;
+	VhostUserFSSlaveMsg msg = { 0 };
+	uint64_t vhu_flags;
+	bool writable = flags & O_RDWR;
+
+	vhu_flags = VHOST_USER_FS_FLAG_MAP_R;
+	if (writable)
+		vhu_flags |= VHOST_USER_FS_FLAG_MAP_W;
+
+	msg.fd_offset[0] = foffset;
+	msg.len[0] = len;
+	msg.c_offset[0] = moffset;
+	msg.flags[0] = vhu_flags;
+
+	if (fuse_virtio_map(req, &msg, lo_fi_fd(req, fi))) {
+		fprintf(stderr, "%s: map over virtio failed (fd=%d)\n",
+		        __func__, (int)fi->fh);
+		ret = EINVAL;
+	}
+
+	fuse_reply_err(req, ret);
 }
 
 static void lo_removemapping(fuse_req_t req, struct fuse_session *se,
