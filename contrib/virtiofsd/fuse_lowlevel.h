@@ -99,6 +99,9 @@ struct fuse_entry_param {
 	    that come through the kernel, this should be set to a very
 	    large value. */
 	double entry_timeout;
+
+	uint64_t version_offset;
+	int64_t initial_version;
 };
 
 /**

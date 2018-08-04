@@ -463,6 +463,11 @@ struct fuse_entry_out {
 	struct fuse_attr attr;
 };
 
+struct fuse_entryver_out {
+	uint64_t	version_index;
+	int64_t		initial_version;
+};
+
 struct fuse_forget_in {
 	uint64_t	nlookup;
 };
