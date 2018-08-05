@@ -44,7 +44,7 @@ typedef struct Nrf51TimerState {
 
     QEMUTimer timer;
 
-    Nrf51TimerRunstate runstate;
+    uint8_t runstate;
 
     uint64_t time_offset;
     uint64_t last_visited;

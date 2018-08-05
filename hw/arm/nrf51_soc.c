@@ -39,6 +39,8 @@
 #define PRIVATE_BASE    0xF0000000
 #define PRIVATE_SIZE    0x10000000
 
+#define TIMER_BASE      0x40008000
+
 /*
  * The size and base is for the NRF51822 part. If other parts
  * are supported in the future, add a sub-class of NRF51SoC for
@@ -168,7 +170,6 @@ static void clock_write(void *opaque, hwaddr addr, uint64_t data, unsigned int s
     qemu_log_mask(LOG_UNIMP, "%s: 0x%" HWADDR_PRIx " <- 0x%" PRIx64 " [%u]\n", __func__, addr, data, size);
 }
 
-
 static const MemoryRegionOps clock_ops = {
     .read = clock_read,
     .write = clock_write
@@ -285,6 +286,19 @@ static void nrf51_soc_realize(DeviceState *dev_soc, Error **errp)
 
     create_unimplemented_device("nrf51_soc.io", IOMEM_BASE, IOMEM_SIZE);
 
+    /* TIMER0 */
+    object_property_set_bool(OBJECT(&s->timer), true, "realized", &err);
+    if (err) {
+        error_propagate(errp, err);
+        return;
+    }
+
+    mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->timer), 0);
+    memory_region_add_subregion_overlap(&s->container, TIMER_BASE, mr, 0);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->timer), 0,
+                       qdev_get_gpio_in(DEVICE(&s->cpu),
+                       BASE_TO_IRQ(TIMER_BASE)));
+
     memory_region_init_io(&s->clock, NULL, &clock_ops, NULL, "nrf51_soc.clock", 0x1000);
     memory_region_add_subregion_overlap(&s->container, IOMEM_BASE, &s->clock, -1);
 
@@ -314,6 +328,11 @@ static void nrf51_soc_init(Object *obj)
                            TYPE_NRF51_UART);
     object_property_add_alias(obj, "serial0", OBJECT(&s->uart), "chardev",
                               &error_abort);
+
+    object_initialize(&s->timer, sizeof(s->timer), TYPE_NRF51_TIMER);
+    object_property_add_child(obj, "timer0", OBJECT(&s->timer), &error_abort);
+    qdev_set_parent_bus(DEVICE(&s->timer), sysbus_get_default());
+
 }
 
 static Property nrf51_soc_properties[] = {
