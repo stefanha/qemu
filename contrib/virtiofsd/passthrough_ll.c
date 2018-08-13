@@ -2371,8 +2371,20 @@ static void lo_removemapping(fuse_req_t req, struct fuse_session *se,
 			     fuse_ino_t ino, unsigned num,
 			     struct fuse_removemapping_one *argp)
 {
-	// TODO
-	fuse_reply_err(req, ENOSYS);
+	VhostUserFSSlaveMsg msg = { 0 };
+	int ret = 0;
+
+	msg.len[0] = argp->len;
+	msg.c_offset[0] = argp->moffset;
+	if (fuse_virtio_unmap(se, &msg)) {
+		fprintf(stderr,
+			"%s: unmap over virtio failed "
+			"(offset=0x%lx, len=0x%lx)\n", __func__,
+			argp->moffset, argp->len);
+		ret = EINVAL;
+	}
+
+	fuse_reply_err(req, ret);
 }
 
 static struct fuse_lowlevel_ops lo_oper = {
