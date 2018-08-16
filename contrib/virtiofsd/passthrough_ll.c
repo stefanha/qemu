@@ -118,6 +118,8 @@ struct lo_data {
 	double timeout;
 	int cache;
 	int timeout_set;
+	int readdirplus_set;
+	int readdirplus_clear;
 	struct lo_inode root; /* protected by lo->mutex */
 	struct lo_map ino_map; /* protected by lo->mutex */
 	struct lo_map dirp_map; /* protected by lo->mutex */
@@ -154,6 +156,10 @@ static const struct fuse_opt lo_opts[] = {
 	  offsetof(struct lo_data, cache), CACHE_ALWAYS },
 	{ "norace",
 	  offsetof(struct lo_data, norace), 1 },
+	{ "readdirplus",
+	  offsetof(struct lo_data, readdirplus_set), 1 },
+	{ "no_readdirplus",
+	  offsetof(struct lo_data, readdirplus_clear), 1 },
 	FUSE_OPT_END
 };
 static bool use_syslog = false;
@@ -468,7 +474,8 @@ static void lo_init(void *userdata,
 		fuse_log(FUSE_LOG_DEBUG, "lo_init: activating flock locks\n");
 		conn->want |= FUSE_CAP_FLOCK_LOCKS;
 	}
-	if (lo->cache == CACHE_NEVER) {
+	if ((lo->cache == CACHE_NEVER && !lo->readdirplus_set) ||
+	    lo->readdirplus_clear) {
 		fuse_log(FUSE_LOG_DEBUG, "lo_init: disabling readdirplus\n");
 		conn->want &= ~FUSE_CAP_READDIRPLUS;
 	}
