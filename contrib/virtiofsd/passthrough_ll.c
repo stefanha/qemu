@@ -1270,11 +1270,17 @@ static void lo_setupmapping(fuse_req_t req, fuse_ino_t ino, uint64_t foffset,
                             uint64_t len, uint64_t moffset, uint64_t flags,
                             struct fuse_file_info *fi)
 {
-        int ret = 0;
+        int ret = 0, fd, res;
         VhostUserFSSlaveMsg msg = { 0 };
         uint64_t vhu_flags;
+	char *buf;
         bool writable = flags & O_RDWR;
 
+	fuse_log(FUSE_LOG_DEBUG, "lo_setupmapping(ino=%" PRIu64 ", fi=0x%p,"
+		 " foffset=%" PRIu64 ", len=%" PRIu64
+		 ", moffset=%" PRIu64 ", flags=%" PRIu64 ")\n", ino,
+		 (void *)fi, foffset, len, moffset, flags);
+ 
         vhu_flags = VHOST_USER_FS_FLAG_MAP_R;
         if (writable)
                 vhu_flags |= VHOST_USER_FS_FLAG_MAP_W;
@@ -1284,12 +1290,27 @@ static void lo_setupmapping(fuse_req_t req, fuse_ino_t ino, uint64_t foffset,
 	msg.c_offset[0] = moffset;
 	msg.flags[0] = vhu_flags;
 
-        if (fuse_virtio_map(req, &msg, fi->fh)) {
-                fprintf(stderr, "%s: map over virtio failed (fd=%d)\n",
-                        __func__, (int)fi->fh);
+	if (fi)
+		fd = fi->fh;
+	else {
+		res = asprintf(&buf, "/proc/self/fd/%i", lo_fd(req, ino));
+		if (res == -1)
+			return (void) fuse_reply_err(req, errno);
+
+		fd = open(buf, flags);
+		free(buf);
+		if (fd == -1)
+			return (void) fuse_reply_err(req, errno);
+	}
+
+        if (fuse_virtio_map(req, &msg, fd)) {
+                fuse_log(FUSE_LOG_ERR, "%s: map over virtio failed (ino=%" PRId64 "fd=%d moffset=0x%" PRIx64 ")\n",
+                        __func__, ino, fi ? (int)fi->fh : lo_fd(req, ino), moffset);
                 ret = EINVAL;
         }
 
+	if (!fi)
+		close(fd);
 	fuse_reply_err(req, ret);
 }
 
