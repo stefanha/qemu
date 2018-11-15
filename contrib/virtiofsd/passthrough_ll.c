@@ -100,9 +100,8 @@ struct lo_cred {
 };
 
 enum {
-	CACHE_NEVER,
-	CACHE_NORMAL,
-	CACHE_SHARED,
+	CACHE_NONE,
+	CACHE_AUTO,
 	CACHE_ALWAYS,
 };
 
@@ -116,6 +115,7 @@ struct lo_data {
 	const char *source;
 	double timeout;
 	int cache;
+	int shared;
 	int timeout_set;
 	int readdirplus_set;
 	int readdirplus_clear;
@@ -147,14 +147,16 @@ static const struct fuse_opt lo_opts[] = {
 	  offsetof(struct lo_data, timeout), 0 },
 	{ "timeout=",
 	  offsetof(struct lo_data, timeout_set), 1 },
-	{ "cache=never",
-	  offsetof(struct lo_data, cache), CACHE_NEVER },
+	{ "cache=none",
+	  offsetof(struct lo_data, cache), CACHE_NONE },
 	{ "cache=auto",
-	  offsetof(struct lo_data, cache), CACHE_NORMAL },
-	{ "cache=shared",
-	  offsetof(struct lo_data, cache), CACHE_SHARED },
+	  offsetof(struct lo_data, cache), CACHE_AUTO },
 	{ "cache=always",
 	  offsetof(struct lo_data, cache), CACHE_ALWAYS },
+	{ "shared",
+	  offsetof(struct lo_data, shared), 1 },
+	{ "no_shared",
+	  offsetof(struct lo_data, shared), 0 },
 	{ "norace",
 	  offsetof(struct lo_data, norace), 1 },
 	{ "readdirplus",
@@ -356,8 +358,8 @@ static void lo_init(void *userdata,
 		conn->want |= FUSE_CAP_FLOCK_LOCKS;
 	}
 	/* TODO: shared version support for readdirplus */
-	if ((lo->cache == CACHE_NEVER && !lo->readdirplus_set) ||
-	    lo->readdirplus_clear || lo->cache == CACHE_SHARED) {
+	if ((lo->cache == CACHE_NONE && !lo->readdirplus_set) ||
+	    lo->readdirplus_clear || lo->shared) {
 		fuse_log(FUSE_LOG_DEBUG, "lo_init: disabling readdirplus\n");
 		conn->want &= ~FUSE_CAP_READDIRPLUS;
 	}
@@ -1408,7 +1410,7 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 		fi->fh = fh;
 		err = lo_do_lookup(req, parent, name, &e);
 	}
-	if (lo->cache == CACHE_NEVER)
+	if (lo->cache == CACHE_NONE)
 		fi->direct_io = 1;
 	else if (lo->cache == CACHE_ALWAYS)
 		fi->keep_cache = 1;
@@ -1485,7 +1487,7 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	}
 
 	fi->fh = fh;
-	if (lo->cache == CACHE_NEVER)
+	if (lo->cache == CACHE_NONE)
 		fi->direct_io = 1;
 	else if (lo->cache == CACHE_ALWAYS)
 		fi->keep_cache = 1;
@@ -2044,7 +2046,7 @@ static void setup_shared_versions(struct lo_data *lo)
 	void *addr;
 
 	lo->ireg_sock = -1;
-	if (lo->cache != CACHE_SHARED)
+	if (!lo->shared)
 		return;
 
 	sock = socket(AF_UNIX, SOCK_SEQPACKET, 0);
@@ -2130,7 +2132,7 @@ int main(int argc, char *argv[])
 	lo.root.next = lo.root.prev = &lo.root;
 	lo.root.fd = -1;
 	lo.root.fuse_ino = FUSE_ROOT_ID;
-	lo.cache = CACHE_NORMAL;
+	lo.cache = CACHE_AUTO;
 
 	/* Set up the ino map like this:
 	 * [0] Reserved (will not be used)
@@ -2184,15 +2186,14 @@ int main(int argc, char *argv[])
 	lo.root.is_symlink = false;
 	if (!lo.timeout_set) {
 		switch (lo.cache) {
-		case CACHE_NEVER:
+		case CACHE_NONE:
 			lo.timeout = 0.0;
 			break;
 
-		case CACHE_NORMAL:
+		case CACHE_AUTO:
 			lo.timeout = 1.0;
 			break;
 
-		case CACHE_SHARED:
 		case CACHE_ALWAYS:
 			lo.timeout = 86400.0;
 			break;
