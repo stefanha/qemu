@@ -2320,7 +2320,7 @@ static void lo_copy_file_range(fuse_req_t req, fuse_ino_t ino_in, off_t off_in,
 }
 #endif
 
-static void lo_destroy(void *userdata)
+static void lo_destroy(void *userdata, struct fuse_session *se)
 {
 	struct lo_data *lo = (struct lo_data*) userdata;
 
