@@ -225,7 +225,7 @@ static void io_write(void *opaque, hwaddr offset, uint64_t value,
     case NRF51_NVMC_ERASEPCR0:
     case NRF51_NVMC_ERASEPCR1:
         if (s->config & NRF51_NVMC_CONFIG_EEN) {
-            /* Mask in-page sub address*/
+            /* Mask in-page sub address */
             value &= ~(NRF51_PAGE_SIZE - 1);
             if (value < (s->flash_size - NRF51_PAGE_SIZE)) {
                 memset(s->storage + value / 4, 0xFF, NRF51_PAGE_SIZE);
