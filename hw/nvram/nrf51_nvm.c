@@ -80,7 +80,7 @@ static const uint32_t ficr_content[64] = {
 
 static uint64_t ficr_read(void *opaque, hwaddr offset, unsigned int size)
 {
-    assert(offset <= sizeof(ficr_content));
+    assert(offset < sizeof(ficr_content));
     return ficr_content[offset / 4];
 }
 
@@ -170,7 +170,7 @@ static uint64_t uicr_read(void *opaque, hwaddr offset, unsigned int size)
 {
     NRF51NVMState *s = NRF51_NVM(opaque);
 
-    assert(offset <= sizeof(s->uicr_content));
+    assert(offset < sizeof(s->uicr_content));
     return s->uicr_content[offset / 4];
 }
 
@@ -179,7 +179,7 @@ static void uicr_write(void *opaque, hwaddr offset, uint64_t value,
 {
     NRF51NVMState *s = NRF51_NVM(opaque);
 
-    assert(offset <= sizeof(s->uicr_content));
+    assert(offset < sizeof(s->uicr_content));
     s->uicr_content[offset / 4] = value;
 }
 
@@ -274,7 +274,7 @@ static void flash_write(void *opaque, hwaddr offset, uint64_t value,
     NRF51NVMState *s = NRF51_NVM(opaque);
 
     if (s->config & NRF51_NVMC_CONFIG_WEN) {
-        assert(offset <= s->flash_size);
+        assert(offset < s->flash_size);
         /* NOR Flash only allows bits to be flipped from 1's to 0's on write */
         s->storage[offset / 4] &= value;
     } else {
