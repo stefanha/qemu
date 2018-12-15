@@ -302,12 +302,12 @@ static void nrf51_nvm_init(Object *obj)
                           NRF51_NVMC_SIZE);
     sysbus_init_mmio(sbd, &s->mmio);
 
-    memory_region_init_io(&s->ficr, NULL, &ficr_ops, s, "nrf51_soc.ficr",
+    memory_region_init_io(&s->ficr, obj, &ficr_ops, s, "nrf51_soc.ficr",
                           sizeof(ficr_content));
     sysbus_init_mmio(sbd, &s->ficr);
 
     memset(s->uicr_content, 0xFF, sizeof(s->uicr_content));
-    memory_region_init_io(&s->uicr, NULL, &uicr_ops, s, "nrf51_soc.uicr",
+    memory_region_init_io(&s->uicr, obj, &uicr_ops, s, "nrf51_soc.uicr",
                           sizeof(s->uicr_content));
     sysbus_init_mmio(sbd, &s->uicr);
 }
