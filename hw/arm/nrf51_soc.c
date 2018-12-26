@@ -55,6 +55,56 @@ static const MemoryRegionOps clock_ops = {
     .write = clock_write
 };
 
+uint32_t twi_regs[0x1000 / 4];
+
+uint32_t read_sequence[] = {0x5A, 0x5A, 0x40};
+
+static uint64_t twi_read(void *opaque, hwaddr addr, unsigned int size)
+{
+    static int i;
+    uint64_t data = 0x00;
+
+    switch (addr) {
+    case 0x11c:
+        data = 0x01;
+        break;
+    case 0x108:
+        data = 0x01;
+        break;
+    case 0x104:
+        data = 0x01;
+        break;
+    case 0x518:
+        data = read_sequence[i];
+        if (i != ARRAY_SIZE(read_sequence)) {
+            i++;
+        }
+        break;
+    default:
+        data = twi_regs[addr / 4];
+        break;
+    }
+
+    qemu_log_mask(LOG_UNIMP, "%s: 0x%" HWADDR_PRIx " [%u] = %" PRIx32 "\n",
+                  __func__, addr, size, (uint32_t)data);
+
+
+    return data;
+}
+
+static void twi_write(void *opaque, hwaddr addr, uint64_t data,
+                        unsigned int size)
+{
+    qemu_log_mask(LOG_UNIMP, "%s: 0x%" HWADDR_PRIx " <- 0x%" PRIx64 " [%u]\n",
+                  __func__, addr, data, size);
+    twi_regs[addr / 4] = data;
+}
+
+static const MemoryRegionOps twi_ops = {
+    .read = twi_read,
+    .write = twi_write
+};
+
 
 static void nrf51_soc_realize(DeviceState *dev_soc, Error **errp)
 {
@@ -172,6 +222,11 @@ static void nrf51_soc_realize(DeviceState *dev_soc, Error **errp)
                           "nrf51_soc.clock", 0x1000);
     memory_region_add_subregion_overlap(&s->container,
                                         NRF51_IOMEM_BASE, &s->clock, -1);
+
+    memory_region_init_io(&s->twi, NULL, &twi_ops, NULL,
+                          "nrf51_soc.twi", 0x1000);
+    memory_region_add_subregion_overlap(&s->container,
+                                        NRF51_TWI_BASE, &s->twi, -1);
 
 
 
