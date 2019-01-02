@@ -276,8 +276,7 @@ static void timer_assert_events(uint32_t ev0, uint32_t ev1, uint32_t ev2,
 
 static void test_nrf51_timer(void)
 {
-    int64_t prev_deadline, curr_deadline;
-    uint32_t steps_to_overflow = 405;
+    uint32_t steps_to_overflow = 408;
 
     /* Compare Match */
     timer_task(NRF51_TIMER_TASK_STOP);
@@ -296,31 +295,27 @@ static void test_nrf51_timer(void)
     /* Barely miss on first step */
     timer_set_cc(1, 162);
     /* Spot on on third step */
-    timer_set_cc(2, 483);
+    timer_set_cc(2, 480);
 
     timer_assert_events(0, 0, 0, 0);
 
     timer_task(NRF51_TIMER_TASK_START);
-    prev_deadline = clock_step_next();
+    clock_step(10000);
     timer_assert_events(1, 0, 0, 0);
 
     /* Swept over on first overflow */
     timer_set_cc(3, 114);
 
-    curr_deadline = clock_step_next();
-    g_assert_cmpint(curr_deadline - prev_deadline, ==, 10000);
-    prev_deadline = curr_deadline;
+    clock_step(10000);
     timer_assert_events(1, 1, 0, 0);
 
-    curr_deadline = clock_step_next();
-    g_assert_cmpint(curr_deadline - prev_deadline, ==, 10000);
-    prev_deadline = curr_deadline;
+    clock_step(10000);
     timer_assert_events(1, 1, 1, 0);
 
     /* Wrap time until internal counter overflows */
     while (steps_to_overflow--) {
         timer_assert_events(1, 1, 1, 0);
-        clock_step_next();
+        clock_step(10000);
     }
 
     timer_assert_events(1, 1, 1, 1);

@@ -60,10 +60,9 @@ typedef struct NRF51TimerState {
     qemu_irq irq;
 
     QEMUTimer timer;
-    int64_t time_offset;
+    int64_t timer_start_ns;
+    int64_t update_counter_ns;
     uint32_t counter;
-    uint32_t counter_inc;
-    uint64_t tick_period;
 
     bool running;
 

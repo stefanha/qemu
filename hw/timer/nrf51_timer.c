@@ -5,6 +5,7 @@
  * Product Spec: http://infocenter.nordicsemi.com/pdf/nRF51822_PS_v3.1.pdf
  *
  * Copyright 2018 Steffen Görtz <contrib@steffen-goertz.de>
+ * Copyright (c) 2019 Red Hat, Inc.
  *
  * This code is licensed under the GPL version 2 or later.  See
  * the COPYING file in the top-level directory.
@@ -16,24 +17,61 @@
 #include "hw/timer/nrf51_timer.h"
 #include "trace.h"
 
-#define MINIMUM_PERIOD 10000UL
-#define TIMER_TICK_PS 62500UL
+#define TIMER_CLK_FREQ 16000000UL
 
 static uint32_t const bitwidths[] = {16, 8, 24, 32};
 
-static void set_prescaler(NRF51TimerState *s, uint32_t prescaler)
+static uint32_t ns_to_ticks(NRF51TimerState *s, int64_t ns)
 {
-    uint64_t period;
-    s->prescaler = prescaler;
+    uint32_t freq = TIMER_CLK_FREQ >> s->prescaler;
 
-    period = ((1UL << s->prescaler) * TIMER_TICK_PS) / 1000;
-    /* Limit minimum timeout period to 10us to allow some progress */
-    if (period < MINIMUM_PERIOD) {
-        s->tick_period = MINIMUM_PERIOD;
-        s->counter_inc = MINIMUM_PERIOD / period;
-    } else {
-        s->tick_period = period;
-        s->counter_inc = 1;
+    return muldiv64(ns, freq, NANOSECONDS_PER_SECOND);
+}
+
+static int64_t ticks_to_ns(NRF51TimerState *s, uint32_t ticks)
+{
+    uint32_t freq = TIMER_CLK_FREQ >> s->prescaler;
+
+    return muldiv64(ticks, NANOSECONDS_PER_SECOND, freq);
+}
+
+/* Returns number of ticks since last call */
+static uint32_t update_counter(NRF51TimerState *s, int64_t now)
+{
+    uint32_t ticks = ns_to_ticks(s, now - s->update_counter_ns);
+
+    s->counter = (s->counter + ticks) % BIT(bitwidths[s->bitmode]);
+    s->update_counter_ns = now;
+    return ticks;
+}
+
+/* Assumes s->counter is up-to-date */
+static void rearm_timer(NRF51TimerState *s, int64_t now)
+{
+    int64_t min_ns = INT64_MAX;
+    size_t i;
+
+    for (i = 0; i < NRF51_TIMER_REG_COUNT; i++) {
+        int64_t delta_ns;
+
+        if (s->events_compare[i]) {
+            continue; /* already expired, ignore it for now */
+        }
+
+        if (s->cc[i] <= s->counter) {
+            delta_ns = ticks_to_ns(s, BIT(bitwidths[s->bitmode]) -
+                                      s->counter + s->cc[i]);
+        } else {
+            delta_ns = ticks_to_ns(s, s->cc[i] - s->counter);
+        }
+
+        if (delta_ns < min_ns) {
+            min_ns = delta_ns;
+        }
+    }
+
+    if (min_ns != INT64_MAX) {
+        timer_mod_ns(&s->timer, now + min_ns);
     }
 }
 
@@ -51,44 +89,44 @@ static void update_irq(NRF51TimerState *s)
 static void timer_expire(void *opaque)
 {
     NRF51TimerState *s = NRF51_TIMER(opaque);
+    int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+    uint32_t cc_remaining[NRF51_TIMER_REG_COUNT];
     bool should_stop = false;
-    uint32_t counter = s->counter;
+    uint32_t ticks;
     size_t i;
-    uint64_t diff;
 
-    if (s->running) {
-        for (i = 0; i < NRF51_TIMER_REG_COUNT; i++) {
-            if (counter < s->cc[i]) {
-                diff = s->cc[i] - counter;
-            } else {
-                diff = (s->cc[i] + BIT(bitwidths[s->bitmode])) - counter;
-            }
-
-            if (diff <= s->counter_inc) {
-                s->events_compare[i] = true;
-
-                if (s->shorts & BIT(i)) {
-                    s->counter = 0;
-                }
-
-                should_stop |= s->shorts & BIT(i + 8);
-            }
-        }
-
-        s->counter += s->counter_inc;
-        s->counter &= (BIT(bitwidths[s->bitmode]) - 1);
-
-        update_irq(s);
-
-        if (should_stop) {
-            s->running = false;
-            timer_del(&s->timer);
+    for (i = 0; i < NRF51_TIMER_REG_COUNT; i++) {
+        if (s->cc[i] > s->counter) {
+            cc_remaining[i] = s->cc[i] - s->counter;
         } else {
-            s->time_offset += s->tick_period;
-            timer_mod_ns(&s->timer, s->time_offset);
+            cc_remaining[i] = BIT(bitwidths[s->bitmode]) -
+                              s->counter + s->cc[i];
         }
-    } else {
+    }
+
+    ticks = update_counter(s, now);
+
+    for (i = 0; i < NRF51_TIMER_REG_COUNT; i++) {
+        if (cc_remaining[i] <= ticks) {
+            s->events_compare[i] = 1;
+
+            if (s->shorts & BIT(i)) {
+                s->timer_start_ns = now;
+                s->update_counter_ns = s->timer_start_ns;
+                s->counter = 0;
+            }
+
+            should_stop |= s->shorts & BIT(i + 8);
+        }
+    }
+
+    update_irq(s);
+
+    if (should_stop) {
+        s->running = false;
         timer_del(&s->timer);
+    } else {
+        rearm_timer(s, now);
     }
 }
 
@@ -96,9 +134,10 @@ static void counter_compare(NRF51TimerState *s)
 {
     uint32_t counter = s->counter;
     size_t i;
+
     for (i = 0; i < NRF51_TIMER_REG_COUNT; i++) {
         if (counter == s->cc[i]) {
-            s->events_compare[i] = true;
+            s->events_compare[i] = 1;
 
             if (s->shorts & BIT(i)) {
                 s->counter = 0;
@@ -161,8 +200,9 @@ static void nrf51_timer_write(void *opaque, hwaddr offset,
     case NRF51_TIMER_TASK_START:
         if (value == NRF51_TRIGGER_TASK && s->mode == NRF51_TIMER_TIMER) {
             s->running = true;
-            s->time_offset = now + s->tick_period;
-            timer_mod_ns(&s->timer, s->time_offset);
+            s->timer_start_ns = now - ticks_to_ns(s, s->counter);
+            s->update_counter_ns = s->timer_start_ns;
+            rearm_timer(s, now);
         }
         break;
     case NRF51_TIMER_TASK_STOP:
@@ -174,17 +214,26 @@ static void nrf51_timer_write(void *opaque, hwaddr offset,
         break;
     case NRF51_TIMER_TASK_COUNT:
         if (value == NRF51_TRIGGER_TASK && s->mode == NRF51_TIMER_COUNTER) {
-            s->counter = (s->counter + 1) & (BIT(bitwidths[s->bitmode]) - 1);
+            s->counter = (s->counter + 1) % BIT(bitwidths[s->bitmode]);
             counter_compare(s);
         }
         break;
     case NRF51_TIMER_TASK_CLEAR:
         if (value == NRF51_TRIGGER_TASK) {
+            s->timer_start_ns = now;
+            s->update_counter_ns = s->timer_start_ns;
             s->counter = 0;
+            if (s->running) {
+                rearm_timer(s, now);
+            }
         }
         break;
     case NRF51_TIMER_TASK_CAPTURE_0 ... NRF51_TIMER_TASK_CAPTURE_3:
         if (value == NRF51_TRIGGER_TASK) {
+            if (s->running) {
+                timer_expire(s); /* update counter and all state */
+            }
+
             idx = (offset - NRF51_TIMER_TASK_CAPTURE_0) / 4;
             s->cc[idx] = s->counter;
         }
@@ -192,6 +241,10 @@ static void nrf51_timer_write(void *opaque, hwaddr offset,
     case NRF51_TIMER_EVENT_COMPARE_0 ... NRF51_TIMER_EVENT_COMPARE_3:
         if (value == NRF51_EVENT_CLEAR) {
             s->events_compare[(offset - NRF51_TIMER_EVENT_COMPARE_0) / 4] = 0;
+
+            if (s->running) {
+                timer_expire(s); /* update counter and all state */
+            }
         }
         break;
     case NRF51_TIMER_REG_SHORTS:
@@ -220,11 +273,19 @@ static void nrf51_timer_write(void *opaque, hwaddr offset,
                 "%s: erroneous change of PRESCALER while timer is running\n",
                 __func__);
         }
-        set_prescaler(s, value & NRF51_TIMER_REG_PRESCALER_MASK);
+        s->prescaler = value & NRF51_TIMER_REG_PRESCALER_MASK;
         break;
     case NRF51_TIMER_REG_CC0 ... NRF51_TIMER_REG_CC3:
+        if (s->running) {
+            timer_expire(s); /* update counter */
+        }
+
         idx = (offset - NRF51_TIMER_REG_CC0) / 4;
-        s->cc[idx] = value & (BIT(bitwidths[s->bitmode]) - 1);
+        s->cc[idx] = value % BIT(bitwidths[s->bitmode]);
+
+        if (s->running) {
+            rearm_timer(s, now);
+        }
         break;
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
@@ -261,10 +322,9 @@ static void nrf51_timer_reset(DeviceState *dev)
     NRF51TimerState *s = NRF51_TIMER(dev);
 
     timer_del(&s->timer);
-    s->time_offset = 0x00;
+    s->timer_start_ns = 0x00;
+    s->update_counter_ns = 0x00;
     s->counter = 0x00;
-    s->counter_inc = 0x00;
-    s->tick_period = 0x00;
     s->running = false;
 
     memset(s->events_compare, 0x00, sizeof(s->events_compare));
@@ -274,19 +334,16 @@ static void nrf51_timer_reset(DeviceState *dev)
     s->inten = 0x00;
     s->mode = 0x00;
     s->bitmode = 0x00;
-    set_prescaler(s, 0x00);
+    s->prescaler = 0x00;
 }
 
 static int nrf51_timer_post_load(void *opaque, int version_id)
 {
     NRF51TimerState *s = NRF51_TIMER(opaque);
-    uint64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
 
     if (s->running && s->mode == NRF51_TIMER_TIMER) {
-        s->time_offset = now;
-        timer_mod_ns(&s->timer, s->time_offset);
+        timer_expire(s);
     }
-
     return 0;
 }
 
@@ -296,10 +353,9 @@ static const VMStateDescription vmstate_nrf51_timer = {
     .post_load = nrf51_timer_post_load,
     .fields = (VMStateField[]) {
         VMSTATE_TIMER(timer, NRF51TimerState),
-        VMSTATE_INT64(time_offset, NRF51TimerState),
+        VMSTATE_INT64(timer_start_ns, NRF51TimerState),
+        VMSTATE_INT64(update_counter_ns, NRF51TimerState),
         VMSTATE_UINT32(counter, NRF51TimerState),
-        VMSTATE_UINT32(counter_inc, NRF51TimerState),
-        VMSTATE_UINT64(tick_period, NRF51TimerState),
         VMSTATE_BOOL(running, NRF51TimerState),
         VMSTATE_UINT8_ARRAY(events_compare, NRF51TimerState,
                             NRF51_TIMER_REG_COUNT),
