@@ -117,7 +117,7 @@ int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 void fuse_free_req(fuse_req_t req);
 
 void fuse_session_process_buf_int(struct fuse_session *se,
-				  const struct fuse_buf *buf, struct fuse_chan *ch);
+				  struct fuse_bufvec *bufv, struct fuse_chan *ch);
 
 
 #define FUSE_MAX_MAX_PAGES 256
