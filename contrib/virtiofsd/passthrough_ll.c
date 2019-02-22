@@ -1160,6 +1160,27 @@ static void unref_inode_lolocked(struct lo_data *lo, struct lo_inode *inode, uin
 	}
 }
 
+static int unref_all_inodes_cb(gpointer key, gpointer value,
+			       gpointer user_data)
+{
+	struct lo_inode *inode  = value;
+	struct lo_data *lo = user_data;
+
+	inode->refcount = 0;
+	lo_map_remove(&lo->ino_map, inode->fuse_ino);
+	close(inode->fd);
+
+	return TRUE;
+}
+
+static void unref_all_inodes(struct lo_data *lo)
+{
+	pthread_mutex_lock(&lo->mutex);
+	g_hash_table_foreach_remove(lo->inodes, unref_all_inodes_cb, lo);
+	pthread_mutex_unlock(&lo->mutex);
+
+}
+
 static void lo_forget_one(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 {
 	struct lo_data *lo = lo_data(req);
@@ -1955,6 +1976,12 @@ static void lo_copy_file_range(fuse_req_t req, fuse_ino_t ino_in, off_t off_in,
 }
 #endif
 
+static void lo_destroy(void *userdata)
+{
+	struct lo_data *lo = (struct lo_data*) userdata;
+	unref_all_inodes(lo);
+}
+
 static struct fuse_lowlevel_ops lo_oper = {
 	.init		= lo_init,
 	.lookup		= lo_lookup,
@@ -1992,6 +2019,7 @@ static struct fuse_lowlevel_ops lo_oper = {
 #ifdef HAVE_COPY_FILE_RANGE
 	.copy_file_range = lo_copy_file_range,
 #endif
+	.destroy        = lo_destroy,
 };
 
 /* Print vhost-user.json backend program capabilities */
