@@ -173,6 +173,21 @@ static void unref_inode_lolocked(struct lo_data *lo, struct lo_inode *inode, uin
 
 static struct lo_inode *lo_find(struct lo_data *lo, struct stat *st);
 
+static int is_dot_or_dotdot(const char *name)
+{
+	return name[0] == '.' && (name[1] == '\0' ||
+				  (name[1] == '.' && name[2] == '\0'));
+}
+
+/* Is `path` a single path component that is not "." or ".."? */
+static int is_safe_path_component(const char *path)
+{
+	if (strchr(path, '/')) {
+		return 0;
+	}
+
+	return !is_dot_or_dotdot(path);
+}
 
 static struct lo_data *lo_data(fuse_req_t req)
 {
@@ -785,6 +800,14 @@ static void lo_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		fuse_log(FUSE_LOG_DEBUG, "lo_lookup(parent=%" PRIu64 ", name=%s)\n",
 			parent, name);
 
+	/* Don't use is_safe_path_component(), allow "." and ".." for NFS export
+	 * support.
+	 */
+	if (strchr(name, '/')) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
 	err = lo_do_lookup(req, parent, name, &e);
 	if (err)
 		fuse_reply_err(req, err);
@@ -847,6 +870,11 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 	struct fuse_entry_param e;
 	struct lo_cred old = {};
 	struct lo_data *lo = lo_data(req);
+
+	if (!is_safe_path_component(name)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
 
 	dir = lo_inode(req, parent);
 	if (!dir) {
@@ -946,6 +974,11 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	struct fuse_entry_param e;
 	int saverr;
 
+	if (!is_safe_path_component(name)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
 	inode = lo_inode(req, ino);
 	if (!inode) {
 		fuse_reply_err(req, EBADF);
@@ -1001,9 +1034,15 @@ static struct lo_inode *lookup_name(fuse_req_t req, fuse_ino_t parent,
 static void lo_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	int res;
-	struct lo_inode *inode = lookup_name(req, parent, name);
+	struct lo_inode *inode;
 	struct lo_data *lo = lo_data(req);
 
+	if (!is_safe_path_component(name)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
+	inode = lookup_name(req, parent, name);
 	if (!inode) {
 		fuse_reply_err(req, EIO);
 		return;
@@ -1025,10 +1064,18 @@ static void lo_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 		      unsigned int flags)
 {
 	int res;
-	struct lo_inode *oldinode = lookup_name(req, parent, name);
-	struct lo_inode *newinode = lookup_name(req, newparent, newname);
+	struct lo_inode *oldinode;
+	struct lo_inode *newinode;
 	struct lo_data *lo = lo_data(req);
 
+	if (!is_safe_path_component(name) ||
+		!is_safe_path_component(newname)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
+	oldinode = lookup_name(req, parent, name);
+	newinode = lookup_name(req, newparent, newname);
 	if (!oldinode) {
 		fuse_reply_err(req, EIO);
 		goto out;
@@ -1069,9 +1116,15 @@ out:
 static void lo_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	int res;
-	struct lo_inode *inode = lookup_name(req, parent, name);
+	struct lo_inode *inode;
 	struct lo_data *lo = lo_data(req);
 
+	if (!is_safe_path_component(name)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
+	inode = lookup_name(req, parent, name);
 	if (!inode) {
 		fuse_reply_err(req, EIO);
 		return;
@@ -1249,12 +1302,6 @@ out_err:
 	fuse_reply_err(req, error);
 }
 
-static int is_dot_or_dotdot(const char *name)
-{
-	return name[0] == '.' && (name[1] == '\0' ||
-				  (name[1] == '.' && name[2] == '\0'));
-}
-
 static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			  off_t offset, struct fuse_file_info *fi, int plus)
 {
@@ -1396,6 +1443,11 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	if (lo_debug(req))
 		fuse_log(FUSE_LOG_DEBUG, "lo_create(parent=%" PRIu64 ", name=%s)\n",
 			parent, name);
+
+	if (!is_safe_path_component(name)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
 
 	err = lo_change_cred(req, &old);
 	if (err)
