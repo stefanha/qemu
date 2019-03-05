@@ -580,12 +580,16 @@ static void fv_queue_set_started(VuDev *dev, int qidx, bool started)
         fuse_log(FUSE_LOG_INFO, "%s: qidx=%d started=%d\n", __func__, qidx, started);
         assert(qidx>=0);
 
-        if (qidx == 0) {
-                /* This is a notification queue for us to tell the guest things
-                 *  we don't expect
-                 * any incoming from the guest here.
-                 */
-                return;
+        /*
+	 * Ignore additional request queues for now.  passthrough_ll.c must be
+         * audited for thread-safety issues first.  It was written with a
+         * well-behaved client in mind and may not protect against all types of
+         * races yet.
+         */
+        if (qidx > 1) {
+                fuse_log(FUSE_LOG_ERR, "%s: multiple request queues not yet implemented, please only configure 1 request queue\n",
+                        __func__);
+                exit(EXIT_FAILURE);
         }
 
         if (started) {
