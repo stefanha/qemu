@@ -57,6 +57,7 @@
 #include <sys/un.h>
 
 #include "ireg.h"
+#include <sys/mount.h>
 
 #include "passthrough_helpers.h"
 #include <gmodule.h>
@@ -2225,12 +2226,143 @@ static void setup_shared_versions(struct lo_data *lo)
 	lo->version_table = addr;
 }
 
+/* Remount with MS_SLAVE so our mounts don't affect the outside world */
+static void setup_remount_slave(void)
+{
+	gchar *mountinfo = NULL;
+	gchar *line;
+	gchar *nextline;
+
+	if (!g_file_get_contents("/proc/self/mountinfo", &mountinfo, NULL, NULL)) {
+		fuse_log(FUSE_LOG_ERR, "unable to read /proc/self/mountinfo\n");
+		exit(EXIT_FAILURE);
+	}
+
+	for (line = mountinfo; line; line = nextline) {
+		gchar **fields = NULL;
+		char *eol;
+
+		nextline = NULL;
+
+		eol = strchr(line, '\n');
+		if (eol) {
+			*eol = '\0';
+			nextline = eol + 1;
+		}
+
+		/*
+		 * The line format is:
+		 * 442 441 253:4 / / rw,relatime shared:1 - xfs /dev/sda1 rw
+		 */
+		fields = g_strsplit(line, " ", -1);
+		if (!fields[0] || !fields[1] || !fields[2] || !fields[3] ||
+		    !fields[4] || !fields[5] || !fields[6]) {
+			goto next; /* parsing failed, skip line */
+		}
+
+		if (!strstr(fields[6], "shared")) {
+			goto next; /* not shared, skip line */
+		}
+
+		if (mount(NULL, fields[4], NULL, MS_SLAVE, NULL) < 0) {
+			err(1, "mount(%s, MS_SLAVE)", fields[4]);
+		}
+
+next:
+		g_strfreev(fields);
+	}
+
+	g_free(mountinfo);
+}
+
+/* This magic is based on lxc's lxc_pivot_root() */
+static void setup_pivot_root(const char *source)
+{
+	int oldroot;
+	int newroot;
+
+	oldroot = open("/", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+	if (oldroot < 0) {
+		fuse_log(FUSE_LOG_ERR, "open(/): %m\n");
+		exit(1);
+	}
+
+	newroot = open(source, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+	if (newroot < 0) {
+		fuse_log(FUSE_LOG_ERR, "open(%s): %m\n", source);
+		exit(1);
+	}
+
+	if (fchdir(newroot) < 0) {
+		fuse_log(FUSE_LOG_ERR, "fchdir(newroot): %m\n");
+		exit(1);
+	}
+
+	if (syscall(__NR_pivot_root, ".", ".") < 0){
+		fuse_log(FUSE_LOG_ERR, "pivot_root(., .): %m\n");
+		exit(1);
+	}
+
+	if (fchdir(oldroot) < 0) {
+		fuse_log(FUSE_LOG_ERR, "fchdir(oldroot): %m\n");
+		exit(1);
+	}
+
+	if (mount("", ".", "", MS_SLAVE | MS_REC, NULL) < 0) {
+		fuse_log(FUSE_LOG_ERR, "mount(., MS_SLAVE | MS_REC): %m\n");
+		exit(1);
+	}
+
+	if (umount2(".", MNT_DETACH) < 0) {
+		fuse_log(FUSE_LOG_ERR, "umount2(., MNT_DETACH): %m\n");
+		exit(1);
+	}
+
+	if (fchdir(newroot) < 0) {
+		fuse_log(FUSE_LOG_ERR, "fchdir(newroot): %m\n");
+		exit(1);
+	}
+
+	close(newroot);
+	close(oldroot);
+}
+
+/*
+ * Make the source directory our root so symlinks cannot escape and no other
+ * files are accessible.
+ */
+static void setup_mount_namespace(const char *source)
+{
+	if (unshare(CLONE_NEWNS) != 0) {
+		fuse_log(FUSE_LOG_ERR, "unshare(CLONE_NEWNS): %m\n");
+		exit(1);
+	}
+
+	setup_remount_slave();
+
+	if (mount(source, source, NULL, MS_BIND, NULL) < 0) {
+		fuse_log(FUSE_LOG_ERR, "mount(%s, %s, MS_BIND): %m\n", source, source);
+		exit(1);
+	}
+
+	setup_pivot_root(source);
+}
+
+/*
+ * Lock down this process to prevent access to other processes or files outside
+ * source directory.  This reduces the impact of arbitrary code execution bugs.
+ */
+static void setup_sandbox(struct lo_data *lo)
+{
+	setup_mount_namespace(lo->source);
+}
+
 static void setup_root(struct lo_data *lo, struct lo_inode *root)
 {
 	int fd, res;
 	struct stat stat;
 
-	fd = open(lo->source, O_PATH);
+	fd = open("/", O_PATH);
 	if (fd == -1) {
 		fuse_log(FUSE_LOG_ERR, "open(%s, O_PATH): %m\n", lo->source);
 		exit(1);
@@ -2374,8 +2506,6 @@ int main(int argc, char *argv[])
 		fuse_log(FUSE_LOG_ERR, "open(\"%s\", O_PATH)", lo.source);
 	setup_shared_versions(&lo);
 
-	setup_root(&lo, &lo.root);
-
 	se = fuse_session_new(&args, &lo_oper, sizeof(lo_oper), &lo);
 	if (se == NULL)
 	    goto err_out1;
@@ -2403,6 +2533,10 @@ int main(int argc, char *argv[])
 
 	/* Must be after daemonize to get the right /proc/self/fd */
 	setup_proc_self_fd(&lo);
+
+	setup_sandbox(&lo);
+
+	setup_root(&lo, &lo.root);
 
 	/* Block until ctrl+c or fusermount -u */
         ret = virtio_loop(se);
