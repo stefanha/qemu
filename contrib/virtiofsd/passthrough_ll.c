@@ -61,6 +61,7 @@
 
 #include "passthrough_helpers.h"
 #include <gmodule.h>
+#include "seccomp.h"
 
 #define HAVE_POSIX_FALLOCATE 1
 
@@ -2355,6 +2356,7 @@ static void setup_mount_namespace(const char *source)
 static void setup_sandbox(struct lo_data *lo)
 {
 	setup_mount_namespace(lo->source);
+	setup_seccomp();
 }
 
 static void setup_root(struct lo_data *lo, struct lo_inode *root)
