@@ -57,6 +57,7 @@
 #include <sys/wait.h>
 
 #include "passthrough_helpers.h"
+#include "seccomp.h"
 
 #define HAVE_POSIX_FALLOCATE 1
 
@@ -1969,6 +1970,7 @@ static void setup_sandbox(struct lo_data *lo, struct fuse_session *se)
 {
 	setup_namespaces(lo, se);
 	setup_mounts(lo->source);
+	setup_seccomp();
 }
 
 int main(int argc, char *argv[])
