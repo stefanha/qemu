@@ -58,6 +58,7 @@
 
 #include "ireg.h"
 #include <sys/mount.h>
+#include <sys/resource.h>
 
 #include "passthrough_helpers.h"
 #include <gmodule.h>
@@ -2391,6 +2392,36 @@ static void setup_proc_self_fd(struct lo_data *lo)
 	}
 }
 
+/* Raise the maximum number of open file descriptors to the system limit */
+static void setup_nofile_rlimit(void)
+{
+	gchar *nr_open = NULL;
+	struct rlimit rlim;
+	long long max;
+
+	if (!g_file_get_contents("/proc/sys/fs/nr_open", &nr_open, NULL, NULL)) {
+		fuse_log(FUSE_LOG_ERR, "unable to read /proc/sys/fs/nr_open\n");
+		exit(1);
+	}
+
+	errno = 0;
+	max = strtoll(nr_open, NULL, 0);
+	if (errno) {
+		fuse_log(FUSE_LOG_ERR, "strtoll(%s): %m\n", nr_open);
+		exit(1);
+	}
+
+	rlim.rlim_cur = max;
+	rlim.rlim_max = max;
+
+	if (setrlimit(RLIMIT_NOFILE, &rlim) < 0) {
+		fuse_log(FUSE_LOG_ERR, "setrlimit(RLIMIT_NOFILE): %m\n");
+		exit(1);
+	}
+
+	g_free(nr_open);
+}
+
 static guint lo_key_hash(gconstpointer key)
 {
         const struct lo_key *lkey = key;
@@ -2426,6 +2457,8 @@ int main(int argc, char *argv[])
 
 	/* Don't mask creation mode, kernel already did that */
 	umask(0);
+
+	setup_nofile_rlimit();
 
 	pthread_mutex_init(&lo.mutex, NULL);
 	lo.inodes = g_hash_table_new(lo_key_hash, lo_key_equal);
