@@ -54,6 +54,7 @@
 #include <sys/xattr.h>
 #include <sys/capability.h>
 #include <sys/mount.h>
+#include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -2100,6 +2101,35 @@ static void setup_sandbox(struct lo_data *lo, struct fuse_session *se)
 	setup_seccomp();
 }
 
+/* Raise the maximum number of open file descriptors */
+static void setup_nofile_rlimit(void)
+{
+	const rlim_t max_fds = 1000000;
+	struct rlimit rlim;
+
+	if (getrlimit(RLIMIT_NOFILE, &rlim) < 0) {
+		fuse_log(FUSE_LOG_ERR, "getrlimit(RLIMIT_NOFILE): %m\n");
+		exit(1);
+	}
+
+	if (rlim.rlim_cur >= max_fds) {
+		return; /* nothing to do */
+	}
+
+	rlim.rlim_cur = max_fds;
+	rlim.rlim_max = max_fds;
+
+	if (setrlimit(RLIMIT_NOFILE, &rlim) < 0) {
+		/* Ignore SELinux denials */
+		if (errno == EPERM) {
+			return;
+		}
+
+		fuse_log(FUSE_LOG_ERR, "setrlimit(RLIMIT_NOFILE): %m\n");
+		exit(1);
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
@@ -2215,6 +2245,8 @@ int main(int argc, char *argv[])
 	    goto err_out3;
 
 	fuse_daemonize(opts.foreground);
+
+	setup_nofile_rlimit();
 
 	setup_sandbox(&lo, se);
 
