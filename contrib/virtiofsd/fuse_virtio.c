@@ -327,8 +327,13 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
                          __func__, skip_size, in_sg_cpy_count, in_sg_left);
                 ret = preadv(buf->buf[0].fd, in_sg_ptr, in_sg_cpy_count, buf->buf[0].pos);
 
-                fuse_log(FUSE_LOG_DEBUG, "%s: preadv_res=%d len=%zd\n",
+                fuse_log(FUSE_LOG_DEBUG, "%s: preadv_res=%d(%m) len=%zd\n",
                          __func__, ret, len);
+                if (ret == -1) {
+                        ret = errno;
+                        free(in_sg_cpy);
+                        goto err;
+                }
                 if (ret < len && ret) {
                         fuse_log(FUSE_LOG_DEBUG, "%s: ret < len\n", __func__);
                         /* Skip over this much next time around */
@@ -347,7 +352,7 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
                 }
                 if (ret != len) {
                         fuse_log(FUSE_LOG_DEBUG, "%s: ret!=len\n", __func__);
-                        ret = -EIO;
+                        ret = EIO;
                         free(in_sg_cpy);
                         goto err;
                 }
@@ -370,7 +375,8 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
         vu_queue_notify(&se->virtio_dev->dev, q);
 
 err:
-        ch->qi->reply_sent = true;
+        if (ret == 0)
+                ch->qi->reply_sent = true;
 
         return ret;
 }
