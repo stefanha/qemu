@@ -463,7 +463,8 @@ static void *fv_queue_thread(void *opaque)
                         * They're spread over multiple descriptors in a scatter/gather set
                         * and we can't trust the guest to keep them still; so copy in/out.
                         */
-                       VuVirtqElement *elem = vu_queue_pop(dev, q, sizeof(VuVirtqElement));
+                       VuVirtqElement *elem = vu_queue_pop(dev, q, sizeof(VuVirtqElement),
+                                                           NULL, NULL);
                        if (!elem) {
                                break;
                        }
