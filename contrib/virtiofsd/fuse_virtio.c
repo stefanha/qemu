@@ -382,6 +382,8 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
                                 buf->buf[0].pos += msg.len[0];
                                 in_sg_ptr++;
                                 bad_in_num--;
+                        } else if (req_res == 0) {
+                                break;
                         } else {
                                 ret = EIO;
                                 free(in_sg_cpy);
