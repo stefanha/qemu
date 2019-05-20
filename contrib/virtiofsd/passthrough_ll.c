@@ -1676,10 +1676,10 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
 	out_buf.buf[0].pos = off;
 
 	if (lo_debug(req))
-		fuse_log(FUSE_LOG_DEBUG, "lo_write(ino=%" PRIu64 ", size=%zd, off=%lu)\n",
+		fuse_log(FUSE_LOG_DEBUG, "lo_write_buf(ino=%" PRIu64 ", size=%zd, off=%lu)\n",
 			ino, out_buf.buf[0].size, (unsigned long) off);
 
-	res = fuse_buf_copy(&out_buf, in_buf, 0);
+	res = fuse_buf_copy(req, &out_buf, in_buf, 0);
 	if(res < 0) {
 		fuse_reply_err(req, -res);
 	} else {
