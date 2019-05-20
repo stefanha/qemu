@@ -1278,6 +1278,17 @@ Slave message types
   A reply is generated indicating whether syncing succeeded.
   [Semantic details TBD]
 
+``VHOST_USER_SLAVE_FS_IO``
+  :id: 7
+  :equivalent ioctl: N/A
+  :slave payload: fd + n * (offset + address + len)
+  :master payload: N/A
+
+  Requests that the QEMU performs IO directly from an fd to guest memory
+  on behalf of the daemon; this is normally for a case where a memory region
+  isn't visible to the daemon.
+  [Semantic details TBD]
+
 .. _reply_ack:
 
 VHOST_USER_PROTOCOL_F_REPLY_ACK

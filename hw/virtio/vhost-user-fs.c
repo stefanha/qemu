@@ -21,6 +21,8 @@
 #include "qemu/error-report.h"
 #include "hw/virtio/vhost-user-fs.h"
 #include "monitor/monitor.h"
+#include "exec/address-spaces.h"
+#include "trace.h"
 
 int vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
                             int fd)
@@ -186,6 +188,89 @@ int vhost_user_fs_slave_sync(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm)
         }
     }
 
+    return res;
+}
+
+int vhost_user_fs_slave_io(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
+                           int fd)
+{
+    VHostUserFS *fs = VHOST_USER_FS(dev->vdev);
+    if (!fs) {
+        /* Shouldn't happen - but seen it in error paths */
+        fprintf(stderr, "%s: Bad fs ptr\n", __func__);
+        return -1;
+    }
+
+    unsigned int i;
+    int res = 0;
+    size_t done = 0;
+
+    if (fd < 0) {
+        fprintf(stderr, "%s: Bad fd for map\n", __func__);
+        return -1;
+    }
+
+    for (i = 0; i < VHOST_USER_FS_SLAVE_ENTRIES && !res; i++) {
+        if (sm->len[i] == 0) {
+            continue;
+        }
+
+        size_t len = sm->len[i];
+        hwaddr gpa = sm->c_offset[i];
+
+        while (len && !res) {
+            MemoryRegionSection mrs = memory_region_find(get_system_memory(),
+                                                         gpa, len);
+            if (!mrs.size) {
+                fprintf(stderr,
+                        "%s: No guest region found for 0x%" HWADDR_PRIx "\n",
+                        __func__, gpa);
+                res = -EFAULT;
+                break;
+            }
+
+            trace_vhost_user_fs_slave_io_loop(mrs.mr->name,
+                                          (uint64_t)mrs.offset_within_region,
+                                          memory_region_is_ram(mrs.mr),
+                                          memory_region_is_romd(mrs.mr),
+                                          (size_t)mrs.size);
+
+            void *hostptr = qemu_map_ram_ptr(mrs.mr->ram_block,
+                                             mrs.offset_within_region);
+            ssize_t transferred;
+            if (sm->flags[i] & VHOST_USER_FS_FLAG_MAP_R) {
+                /* Read from file into RAM */
+                if (mrs.mr->readonly) {
+                    res = -EFAULT;
+                    break;
+                }
+                transferred = pread(fd, hostptr, mrs.size, sm->fd_offset[i]);
+            } else {
+                /* Write into file from RAM */
+                assert((sm->flags[i] & VHOST_USER_FS_FLAG_MAP_W));
+                transferred = pwrite(fd, hostptr, mrs.size, sm->fd_offset[i]);
+            }
+            trace_vhost_user_fs_slave_io_loop_res(transferred);
+            if (transferred < 0) {
+                res = -errno;
+                break;
+            }
+            if (!transferred) {
+                /* EOF */
+                break;
+            }
+
+            done += transferred;
+            len -= transferred;
+        }
+    }
+    close(fd);
+
+    trace_vhost_user_fs_slave_io_exit(res, done);
+    /*
+     * TODO! We should be returning 'done' if possible but our error handling
+     * doesn't know about that yet.
+     */
     return res;
 }
 

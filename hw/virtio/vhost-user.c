@@ -110,6 +110,7 @@ typedef enum VhostUserSlaveRequest {
     VHOST_USER_SLAVE_FS_MAP = 4,
     VHOST_USER_SLAVE_FS_UNMAP = 5,
     VHOST_USER_SLAVE_FS_SYNC = 6,
+    VHOST_USER_SLAVE_FS_IO = 7,
     VHOST_USER_SLAVE_MAX
 }  VhostUserSlaveRequest;
 
@@ -1068,6 +1069,9 @@ static void slave_read(void *opaque)
         break;
     case VHOST_USER_SLAVE_FS_SYNC:
         ret = vhost_user_fs_slave_sync(dev, &payload.fs);
+        break;
+    case VHOST_USER_SLAVE_FS_IO:
+        ret = vhost_user_fs_slave_io(dev, &payload.fs, fd[0]);
         break;
 #endif
     default:
