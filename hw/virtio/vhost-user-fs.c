@@ -24,14 +24,14 @@
 #include "exec/address-spaces.h"
 #include "trace.h"
 
-int vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
-                            int fd)
+uint64_t vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
+                                 int fd)
 {
     VHostUserFS *fs = VHOST_USER_FS(dev->vdev);
     if (!fs) {
         /* Shouldn't happen - but has a habit of doing when things are failing */
         fprintf(stderr, "%s: Bad fs ptr\n", __func__);
-        return -1;
+        return (uint64_t)-1;
     }
     size_t cache_size = fs->conf.cache_size;
     if (!cache_size) {
@@ -45,7 +45,7 @@ int vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
 
     if (fd < 0) {
         fprintf(stderr, "%s: Bad fd for map\n", __func__);
-        return -1;
+        return (uint64_t)-1;
     }
 
     for (i = 0; i < VHOST_USER_FS_SLAVE_ENTRIES; i++) {
@@ -67,11 +67,11 @@ int vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
                  ((sm->flags[i] & VHOST_USER_FS_FLAG_MAP_W) ? PROT_WRITE : 0),
                  MAP_SHARED | MAP_FIXED,
                  fd, sm->fd_offset[i]) != (cache_host + sm->c_offset[i])) {
+            res = -errno;
             fprintf(stderr, "%s: map failed err %d [%d] %"
                             PRIx64 "+%" PRIx64 " from %" PRIx64 "\n", __func__,
                             errno, i, sm->c_offset[i], sm->len[i],
                             sm->fd_offset[i]);
-            res = -1;
             break;
         }
     }
@@ -80,10 +80,10 @@ int vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
         /* Something went wrong, unmap them all */
         vhost_user_fs_slave_unmap(dev, sm);
     }
-    return res;
+    return (uint64_t)res;
 }
 
-int vhost_user_fs_slave_unmap(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm)
+uint64_t vhost_user_fs_slave_unmap(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm)
 {
     VHostUserFS *fs = VHOST_USER_FS(dev->vdev);
     if (!fs) {
@@ -136,20 +136,20 @@ int vhost_user_fs_slave_unmap(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm)
         ptr = mmap(cache_host + sm->c_offset[i], sm->len[i],
                 PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
         if (ptr != (cache_host + sm->c_offset[i])) {
+            res = -errno;
             fprintf(stderr, "%s: mmap failed (%s) [%d] %"
                             PRIx64 "+%" PRIx64 " from %" PRIx64 " res: %p\n",
                             __func__,
                             strerror(errno),
                             i, sm->c_offset[i], sm->len[i],
                             sm->fd_offset[i], ptr);
-            res = -1;
         }
     }
 
-    return res;
+    return (uint64_t)res;
 }
 
-int vhost_user_fs_slave_sync(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm)
+uint64_t vhost_user_fs_slave_sync(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm)
 {
     VHostUserFS *fs = VHOST_USER_FS(dev->vdev);
     size_t cache_size = fs->conf.cache_size;
@@ -179,26 +179,26 @@ int vhost_user_fs_slave_sync(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm)
 
         if (msync(cache_host + sm->c_offset[i], sm->len[i],
                   MS_SYNC /* ?? */)) {
+            res = -errno;
             fprintf(stderr, "%s: msync failed (%s) [%d] %"
                             PRIx64 "+%" PRIx64 " from %" PRIx64 "\n", __func__,
                             strerror(errno),
                             i, sm->c_offset[i], sm->len[i],
                             sm->fd_offset[i]);
-            res = -1;
         }
     }
 
-    return res;
+    return (uint64_t)res;
 }
 
-int vhost_user_fs_slave_io(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
-                           int fd)
+uint64_t vhost_user_fs_slave_io(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
+                                int fd)
 {
     VHostUserFS *fs = VHOST_USER_FS(dev->vdev);
     if (!fs) {
         /* Shouldn't happen - but seen it in error paths */
         fprintf(stderr, "%s: Bad fs ptr\n", __func__);
-        return -1;
+        return (uint64_t)-1;
     }
 
     unsigned int i;
@@ -207,7 +207,7 @@ int vhost_user_fs_slave_io(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
 
     if (fd < 0) {
         fprintf(stderr, "%s: Bad fd for map\n", __func__);
-        return -1;
+        return (uint64_t)-1;
     }
 
     for (i = 0; i < VHOST_USER_FS_SLAVE_ENTRIES && !res; i++) {
@@ -271,7 +271,7 @@ int vhost_user_fs_slave_io(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
      * TODO! We should be returning 'done' if possible but our error handling
      * doesn't know about that yet.
      */
-    return res;
+    return (uint64_t)res;
 }
 
 

@@ -341,7 +341,7 @@ int vhost_backend_invalidate_device_iotlb(struct vhost_dev *dev,
     return -ENODEV;
 }
 
-int vhost_backend_handle_iotlb_msg(struct vhost_dev *dev,
+uint64_t vhost_backend_handle_iotlb_msg(struct vhost_dev *dev,
                                           struct vhost_iotlb_msg *imsg)
 {
     int ret = 0;
@@ -364,5 +364,5 @@ int vhost_backend_handle_iotlb_msg(struct vhost_dev *dev,
         break;
     }
 
-    return ret;
+    return !!ret;
 }
