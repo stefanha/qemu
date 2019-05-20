@@ -106,6 +106,7 @@ typedef enum VhostUserSlaveRequest {
     VHOST_USER_SLAVE_FS_MAP = 4,
     VHOST_USER_SLAVE_FS_UNMAP = 5,
     VHOST_USER_SLAVE_FS_SYNC = 6,
+    VHOST_USER_SLAVE_FS_IO = 7,
     VHOST_USER_SLAVE_MAX
 }  VhostUserSlaveRequest;
 
