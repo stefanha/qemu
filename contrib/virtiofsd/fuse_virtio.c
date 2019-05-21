@@ -374,10 +374,10 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
                         if (len < msg.len[0]) {
                                 msg.len[0] = len;
                         }
-                        bool req_res = !fuse_virtio_io(se, &msg, buf->buf[0].fd);
-                        fuse_log(FUSE_LOG_DEBUG, "%s: bad loop; len=%zd bad_in_num=%d fd_offset=%zd c_offset=%p req_res=%d\n",
+                        int64_t req_res =fuse_virtio_io(se, &msg, buf->buf[0].fd);
+                        fuse_log(FUSE_LOG_DEBUG, "%s: bad loop; len=%zd bad_in_num=%d fd_offset=%zd c_offset=%p req_res=%ld\n",
                                  __func__, len, bad_in_num, buf->buf[0].pos, in_sg_ptr[0].iov_base, req_res);
-                        if (req_res) {
+                        if (req_res > 0) {
                                 len -= msg.len[0];
                                 buf->buf[0].pos += msg.len[0];
                                 in_sg_ptr++;
@@ -385,7 +385,7 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
                         } else if (req_res == 0) {
                                 break;
                         } else {
-                                ret = EIO;
+                                ret = req_res;
                                 free(in_sg_cpy);
                                 goto err;
                         }
@@ -869,32 +869,32 @@ int virtio_session_mount(struct fuse_session *se)
         return 0;
 }
 
-int fuse_virtio_map(fuse_req_t req, VhostUserFSSlaveMsg *msg, int fd)
+int64_t fuse_virtio_map(fuse_req_t req, VhostUserFSSlaveMsg *msg, int fd)
 {
         if (!req->se->virtio_dev) return -ENODEV;
-        return !vu_fs_cache_request(&req->se->virtio_dev->dev,
-                                    VHOST_USER_SLAVE_FS_MAP, fd, msg);
+        return vu_fs_cache_request(&req->se->virtio_dev->dev,
+                                   VHOST_USER_SLAVE_FS_MAP, fd, msg);
 }
 
-int fuse_virtio_unmap(struct fuse_session *se, VhostUserFSSlaveMsg *msg)
+int64_t fuse_virtio_unmap(struct fuse_session *se, VhostUserFSSlaveMsg *msg)
 {
         if (!se->virtio_dev) return -ENODEV;
-        return !vu_fs_cache_request(&se->virtio_dev->dev,
-                                    VHOST_USER_SLAVE_FS_UNMAP, -1, msg);
+        return vu_fs_cache_request(&se->virtio_dev->dev,
+                                   VHOST_USER_SLAVE_FS_UNMAP, -1, msg);
 }
 
-int fuse_virtio_sync(fuse_req_t req, VhostUserFSSlaveMsg *msg)
+int64_t fuse_virtio_sync(fuse_req_t req, VhostUserFSSlaveMsg *msg)
 {
         if (!req->se->virtio_dev) return -ENODEV;
-        return !vu_fs_cache_request(&req->se->virtio_dev->dev,
-                                    VHOST_USER_SLAVE_FS_SYNC, -1, msg);
+        return vu_fs_cache_request(&req->se->virtio_dev->dev,
+                                   VHOST_USER_SLAVE_FS_SYNC, -1, msg);
 }
 
-int fuse_virtio_io(struct fuse_session *se, VhostUserFSSlaveMsg *msg, int fd)
+int64_t fuse_virtio_io(struct fuse_session *se, VhostUserFSSlaveMsg *msg, int fd)
 {
         if (!se->virtio_dev) return -ENODEV;
-        return !vu_fs_cache_request(&se->virtio_dev->dev,
-                                    VHOST_USER_SLAVE_FS_IO, fd, msg);
+        return vu_fs_cache_request(&se->virtio_dev->dev,
+                                   VHOST_USER_SLAVE_FS_IO, fd, msg);
 }
 
 /*
@@ -921,9 +921,8 @@ ssize_t fuse_virtio_write(fuse_req_t req,
 	msg.len[0] = len;
 	msg.flags[0] = VHOST_USER_FS_FLAG_MAP_W;
 
-	bool result = !fuse_virtio_io(req->se, &msg, dst->fd);
-        /* TODO: Rework the result path to actually get length/error */
-        fuse_log(FUSE_LOG_DEBUG, "%s: result=%d\n", __func__, result);
-	return result ? len : -EIO;
+	int64_t result = fuse_virtio_io(req->se, &msg, dst->fd);
+        fuse_log(FUSE_LOG_DEBUG, "%s: result=%ld\n", __func__, result);
+	return result;
 }
 

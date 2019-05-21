@@ -2046,7 +2046,7 @@ size_t iov_length(const struct iovec *iov, size_t count);
  * @param fd The fd to map
  * @return Zero on success
  */
-int fuse_virtio_map(fuse_req_t req, VhostUserFSSlaveMsg *msg, int fd);
+int64_t fuse_virtio_map(fuse_req_t req, VhostUserFSSlaveMsg *msg, int fd);
 
 /**
  * For use with virtio-fs; request unmapping of part of the cache
@@ -2055,7 +2055,7 @@ int fuse_virtio_map(fuse_req_t req, VhostUserFSSlaveMsg *msg, int fd);
  * @param msg A set of unmapping requests
  * @return Zero on success
  */
-int fuse_virtio_unmap(struct fuse_session *se, VhostUserFSSlaveMsg *msg);
+int64_t fuse_virtio_unmap(struct fuse_session *se, VhostUserFSSlaveMsg *msg);
 
 /**
  * For use with virtio-fs; request synchronisation of part of the cache
@@ -2065,7 +2065,7 @@ int fuse_virtio_unmap(struct fuse_session *se, VhostUserFSSlaveMsg *msg);
  * @param msg A set of syncing requests
  * @return Zero on success
  */
-int fuse_virtio_sync(fuse_req_t req, VhostUserFSSlaveMsg *msg);
+int64_t fuse_virtio_sync(fuse_req_t req, VhostUserFSSlaveMsg *msg);
 
 /**
  * For use with virtio-fs; request IO directly to memory
@@ -2073,9 +2073,9 @@ int fuse_virtio_sync(fuse_req_t req, VhostUserFSSlaveMsg *msg);
  * @param se The current session
  * @param msg A set of IO requests
  * @param fd The fd to map
- * @return Zero on success
+ * @return Length on success, negative errno on error
  */
-int fuse_virtio_io(struct fuse_session *se, VhostUserFSSlaveMsg *msg, int fd);
+int64_t fuse_virtio_io(struct fuse_session *se, VhostUserFSSlaveMsg *msg, int fd);
 
 /**
  * For use with virtio-fs; wrapper for fuse_virtio_io for writes

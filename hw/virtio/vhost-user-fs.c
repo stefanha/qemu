@@ -249,11 +249,10 @@ uint64_t vhost_user_fs_slave_io(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
     close(fd);
 
     trace_vhost_user_fs_slave_io_exit(res, done);
-    /*
-     * TODO! We should be returning 'done' if possible but our error handling
-     * doesn't know about that yet.
-     */
-    return (uint64_t)res;
+    if (res < 0) {
+        return (uint64_t)res;
+    }
+    return (uint64_t)done;
 }
 
 
