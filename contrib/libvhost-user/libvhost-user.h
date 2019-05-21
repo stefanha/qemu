@@ -667,9 +667,9 @@ bool vu_queue_avail_bytes(VuDev *dev, VuVirtq *vq, unsigned int in_bytes,
  * @fd: an fd (only required for map, else must be -1)
  * @fsm: The body of the message
  *
- * Returns: true if the reply was 0
+ * Returns: 0 or above for success, negative errno on error
  */
-bool vu_fs_cache_request(VuDev *dev, VhostUserSlaveRequest req, int fd,
-                         VhostUserFSSlaveMsg *fsm);
+int64_t vu_fs_cache_request(VuDev *dev, VhostUserSlaveRequest req, int fd,
+                            VhostUserFSSlaveMsg *fsm);
 
 #endif /* LIBVHOST_USER_H */

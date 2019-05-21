@@ -2536,8 +2536,8 @@ vu_queue_push(VuDev *dev, VuVirtq *vq,
     vu_queue_inflight_post_put(dev, vq, elem->index);
 }
 
-bool vu_fs_cache_request(VuDev *dev, VhostUserSlaveRequest req, int fd,
-                         VhostUserFSSlaveMsg *fsm)
+int64_t vu_fs_cache_request(VuDev *dev, VhostUserSlaveRequest req, int fd,
+                            VhostUserFSSlaveMsg *fsm)
 {
     int fd_num = 0;
     bool res;
@@ -2556,18 +2556,24 @@ bool vu_fs_cache_request(VuDev *dev, VhostUserSlaveRequest req, int fd,
     vmsg.fd_num = fd_num;
 
     if ((dev->protocol_features & VHOST_USER_PROTOCOL_F_SLAVE_SEND_FD) == 0) {
-        return false;
+        return -EINVAL;
     }
 
     pthread_mutex_lock(&dev->slave_mutex);
     if (!vu_message_write(dev, dev->slave_fd, &vmsg)) {
         pthread_mutex_unlock(&dev->slave_mutex);
-        return false;
+        return -EIO;
     }
 
     /* Also unlocks the slave_mutex */
     res = vu_process_message_reply(dev, &vmsg, &payload);
-    res = res && (payload == 0);
-    return res;
+    if (!res) {
+        return -EIO;
+    }
+    /*
+     * Payload is delivered as uint64_t but is actually signed for
+     * errors.
+     */
+    return (int64_t)payload;
 }
 
