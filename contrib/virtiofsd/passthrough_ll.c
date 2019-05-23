@@ -768,6 +768,14 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 	struct lo_data *lo = lo_data(req);
 	struct lo_inode *inode, *dir = lo_inode(req, parent);
 
+        /*
+         * name_to_handle_at() and open_by_handle_at() can reach here with fuse
+         * mount point in guest, but we don't have its inode info in the
+         * ino_map.
+         */
+        if (!dir)
+                return ENOENT;
+
 	memset(e, 0, sizeof(*e));
 	e->attr_timeout = lo->timeout;
 	e->entry_timeout = lo->timeout;
