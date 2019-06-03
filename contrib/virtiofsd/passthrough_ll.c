@@ -2061,20 +2061,29 @@ static void lo_setupmapping(fuse_req_t req, fuse_ino_t ino, uint64_t foffset,
 }
 
 static void lo_removemapping(fuse_req_t req, struct fuse_session *se,
-                             fuse_ino_t ino, uint64_t moffset,
-                             uint64_t len)
+                             fuse_ino_t ino, unsigned num,
+                             struct fuse_removemapping_one *argp)
 {
         VhostUserFSSlaveMsg msg = { 0 };
 	int ret = 0;
 
-	msg.len[0] = len;
-	msg.c_offset[0] = moffset;
-        if (fuse_virtio_unmap(se, &msg)) {
-                fprintf(stderr,
-                        "%s: unmap over virtio failed "
-                        "(offset=0x%lx, len=0x%lx)\n", __func__, moffset, len);
-                ret = EINVAL;
-        }
+	for (int i = 0; num > 0; i++, argp++) {
+		msg.len[i] = argp->len;
+		msg.c_offset[i] = argp->moffset;
+
+		if (--num == 0 || i == VHOST_USER_FS_SLAVE_ENTRIES - 1) {
+			if (fuse_virtio_unmap(se, &msg)) {
+				fuse_log(FUSE_LOG_ERR, "%s: unmap over virtio failed "
+					"(offset=0x%lx, len=0x%lx)\n", __func__, argp->moffset, argp->len);
+				ret = EINVAL;
+				break;
+			}
+			if (num > 0) {
+				i = 0;
+				memset(&msg, 0, sizeof(msg));
+			}
+		}
+	}
 
 	fuse_reply_err(req, ret);
 }

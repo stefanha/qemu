@@ -23,6 +23,7 @@
 #endif
 
 #include "fuse_common.h"
+#include "fuse_kernel.h"
 
 #include <utime.h>
 #include <fcntl.h>
@@ -1224,7 +1225,6 @@ struct fuse_lowlevel_ops {
         void (*removemapping) (fuse_req_t req, struct fuse_session *se,
                                fuse_ino_t ino, unsigned num,
                                struct fuse_removemapping_one *argp);
-
 };
 
 /**

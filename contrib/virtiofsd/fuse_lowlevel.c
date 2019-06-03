@@ -1903,9 +1903,19 @@ static void do_removemapping(fuse_req_t req, fuse_ino_t nodeid,
 			     struct fuse_mbuf_iter *iter)
 {
 	struct fuse_removemapping_in *arg;
+	struct fuse_removemapping_one *one;
 
 	arg = fuse_mbuf_iter_advance(iter, sizeof(*arg));
-	if (!arg) {
+	if (!arg || arg->count <= 0) {
+		fuse_log(FUSE_LOG_ERR, "do_removemapping: invalid arg %p\n", arg);
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
+	one = fuse_mbuf_iter_advance(iter, arg->count * sizeof(*one));
+	if (!one) {
+		fuse_log(FUSE_LOG_ERR, "do_removemapping: invalid in, expected %d * %ld, has %ld - %ld\n",
+				arg->count, sizeof(*one), iter->size, iter->pos);
 		fuse_reply_err(req, EINVAL);
 		return;
 	}
