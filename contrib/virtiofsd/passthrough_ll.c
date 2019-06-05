@@ -2488,7 +2488,8 @@ int main(int argc, char *argv[])
 	lo_map_init(&lo.fd_map);
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
-		return 1;
+		goto err_out1;
+
 	if (opts.show_help) {
 		printf("usage: %s [options]\n\n", argv[0]);
 		fuse_cmdline_help();
@@ -2503,7 +2504,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (fuse_opt_parse(&args, &lo, lo_opts, NULL)== -1)
-		return 1;
+		goto err_out1;
 
 	lo.debug = opts.debug;
 	if (lo.source) {
