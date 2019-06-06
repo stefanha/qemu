@@ -869,6 +869,13 @@ int virtio_session_mount(struct fuse_session *se)
         return 0;
 }
 
+void virtio_session_close(struct fuse_session *se)
+{
+        close(se->vu_socketfd);
+        free(se->virtio_dev);
+        se->virtio_dev = NULL;
+}
+
 int64_t fuse_virtio_map(fuse_req_t req, VhostUserFSSlaveMsg *msg, int fd)
 {
         if (!req->se->virtio_dev) return -ENODEV;

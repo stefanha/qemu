@@ -2575,6 +2575,13 @@ void fuse_session_destroy(struct fuse_session *se)
 	free(se->cuse_data);
 	if (se->fd != -1)
 		close(se->fd);
+
+        if (se->vu_socket_path) {
+                virtio_session_close(se);
+                free(se->vu_socket_path);
+                se->vu_socket_path = NULL;
+        }
+
 	free(se);
 }
 
