@@ -2521,9 +2521,8 @@ int main(int argc, char *argv[])
 			fuse_log(FUSE_LOG_ERR, "source is not a directory\n");
 			exit(1);
 		}
-
 	} else {
-		lo.source = "/";
+		lo.source = strdup("/");
 	}
 	lo.root.is_symlink = false;
 	if (!lo.timeout_set) {
@@ -2607,6 +2606,8 @@ err_out1:
 
 	if (lo.root.fd >= 0)
 		close(lo.root.fd);
+
+        free((char *)lo.source);
 
 	return ret ? 1 : 0;
 }
