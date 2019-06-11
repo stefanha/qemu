@@ -788,7 +788,6 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		close(newfd);
 		newfd = -1;
 	} else {
-		saverr = ENOMEM;
 		inode = calloc(1, sizeof(struct lo_inode));
 		if (!inode)
 			goto out_err;
@@ -814,7 +813,9 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 	res = fstatat(inode->fd, "", &e->attr,
 		      AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
 	if (res == -1) {
+		saverr = errno;
 		unref_inode_lolocked(lo, inode, 1);
+		errno = saverr;
 		goto out_err;
 	}
 
