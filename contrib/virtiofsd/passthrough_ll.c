@@ -860,7 +860,7 @@ static void lo_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	if (err)
 		fuse_reply_err(req, err);
 	else
-		fuse_reply_entry(req, &e);
+		fuse_reply_entry(req, &e, lo_data(req)->shared);
 }
 
 /*
@@ -955,7 +955,7 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 		fuse_log(FUSE_LOG_DEBUG, "  %lli/%s -> %lli\n",
 			(unsigned long long) parent, name, (unsigned long long) e.ino);
 
-	fuse_reply_entry(req, &e);
+	fuse_reply_entry(req, &e, lo->shared);
 	return;
 
 out:
@@ -1057,7 +1057,7 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 			(unsigned long long) parent, name,
 			(unsigned long long) e.ino);
 
-	fuse_reply_entry(req, &e);
+	fuse_reply_entry(req, &e, lo->shared);
 	return;
 
 out_err:
@@ -1545,7 +1545,7 @@ out:
 	if (err)
 		fuse_reply_err(req, err);
 	else
-		fuse_reply_create(req, &e, fi);
+		fuse_reply_create(req, &e, fi, lo->shared);
 }
 
 /* Should be called with inode->plock_mutex held */

@@ -376,13 +376,16 @@ static void fill_open(struct fuse_open_out *arg,
 		arg->open_flags |= FOPEN_NONSEEKABLE;
 }
 
-int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
+int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e, bool shared)
 {
 	char buf[sizeof(struct fuse_entry_out) + sizeof(struct fuse_entryver_out)];
 	struct fuse_entry_out *earg = (struct fuse_entry_out *) buf;
 	struct fuse_entryver_out *ever = (struct fuse_entryver_out *) (buf + sizeof(struct fuse_entry_out));
 	size_t size = req->se->conn.proto_minor < 9 ?
 		FUSE_COMPAT_ENTRY_OUT_SIZE : sizeof(buf);
+
+        if ((req->se->conn.proto_minor >= 9) && !shared)
+                size -= sizeof(struct fuse_entryver_out);
 
 	/* before ABI 7.4 e->ino == 0 was invalid, only ENOENT meant
 	   negative entry */
@@ -397,7 +400,7 @@ int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
 }
 
 int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
-		      const struct fuse_file_info *f)
+		      const struct fuse_file_info *f, bool shared)
 {
 	char buf[sizeof(struct fuse_entry_out) + sizeof(struct fuse_open_out) + sizeof(struct fuse_entryver_out)];
 	size_t entrysize = req->se->conn.proto_minor < 9 ?
@@ -412,7 +415,8 @@ int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
 	ever->initial_version = e->initial_version;
 	ever->version_index = e->version_offset;
 	return send_reply_ok(req, buf,
-			     entrysize + sizeof(struct fuse_open_out) + sizeof(struct fuse_entryver_out));
+			     entrysize + sizeof(struct fuse_open_out) +
+                             (shared ? sizeof(struct fuse_entryver_out) : 0));
 }
 
 int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
