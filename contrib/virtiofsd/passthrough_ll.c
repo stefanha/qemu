@@ -42,6 +42,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
+#include <syslog.h>
 #include <limits.h>
 #include <dirent.h>
 #include <assert.h>
@@ -186,6 +187,7 @@ static const struct fuse_opt lo_opts[] = {
 	  offsetof(struct lo_data, readdirplus_clear), 1 },
 	FUSE_OPT_END
 };
+static bool use_syslog = false;
 static void unref_inode_lolocked(struct lo_data *lo, struct lo_inode *inode, uint64_t n);
 
 static struct lo_inode *lo_find(struct lo_data *lo, struct stat *st);
@@ -2544,10 +2546,10 @@ static void setup_mount_namespace(const char *source)
  * Lock down this process to prevent access to other processes or files outside
  * source directory.  This reduces the impact of arbitrary code execution bugs.
  */
-static void setup_sandbox(struct lo_data *lo)
+static void setup_sandbox(struct lo_data *lo, bool enable_syslog)
 {
 	setup_mount_namespace(lo->source);
-	setup_seccomp();
+	setup_seccomp(enable_syslog);
 }
 
 static void setup_root(struct lo_data *lo, struct lo_inode *root)
@@ -2650,6 +2652,27 @@ static void fuse_lo_data_cleanup(struct lo_data *lo)
         free((char *)lo->source);
 }
 
+static void log_func(enum fuse_log_level level,
+                     const char *fmt, va_list ap)
+{
+	if (use_syslog) {
+		int priority = LOG_ERR;
+		switch (level) {
+			case FUSE_LOG_EMERG:   priority = LOG_EMERG;   break;
+			case FUSE_LOG_ALERT:   priority = LOG_ALERT;   break;
+			case FUSE_LOG_CRIT:    priority = LOG_CRIT;    break;
+			case FUSE_LOG_ERR:     priority = LOG_ERR;     break;
+			case FUSE_LOG_WARNING: priority = LOG_WARNING; break;
+			case FUSE_LOG_NOTICE:  priority = LOG_NOTICE;  break;
+			case FUSE_LOG_INFO:    priority = LOG_INFO;    break;
+			case FUSE_LOG_DEBUG:   priority = LOG_DEBUG;   break;
+		}
+		vsyslog(priority, fmt, ap);
+	} else {
+		vfprintf(stderr, fmt, ap);
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
@@ -2688,7 +2711,11 @@ int main(int argc, char *argv[])
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		goto err_out1;
-
+	fuse_set_log_func(log_func);
+	use_syslog = opts.syslog;
+	if (use_syslog) {
+	    openlog("virtiofsd", LOG_PID, LOG_DAEMON);
+	}
 	if (opts.show_help) {
 		printf("usage: %s [options]\n\n", argv[0]);
 		fuse_cmdline_help();
@@ -2777,7 +2804,7 @@ int main(int argc, char *argv[])
 	/* Must be after daemonize to get the right /proc/self/fd */
 	setup_proc_self_fd(&lo);
 
-	setup_sandbox(&lo);
+	setup_sandbox(&lo, opts.syslog);
 
 	setup_root(&lo, &lo.root);
 

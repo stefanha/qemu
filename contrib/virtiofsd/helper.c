@@ -48,6 +48,7 @@ static const struct fuse_opt fuse_helper_opts[] = {
 #endif
 	FUSE_HELPER_OPT("clone_fd",	clone_fd),
 	FUSE_HELPER_OPT("max_idle_threads=%u", max_idle_threads),
+	FUSE_HELPER_OPT("--syslog",	syslog),
 	FUSE_OPT_END
 };
 
@@ -129,6 +130,7 @@ void fuse_cmdline_help(void)
 	printf("    -h   --help                print help\n"
 	       "    -V   --version             print version\n"
 	       "    -d   -o debug              enable debug output (implies -f)\n"
+	       "    --syslog                   log to syslog (default stderr)\n"
 	       "    -f                         foreground operation\n"
 	       "    -s                         disable multi-threaded operation\n"
 	       "    -o clone_fd                use separate fuse device fd for each thread\n"
