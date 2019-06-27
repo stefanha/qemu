@@ -121,7 +121,8 @@ struct virtio_pci_cap {
 	uint8_t cap_len;		/* Generic PCI field: capability length */
 	uint8_t cfg_type;		/* Identifies the structure. */
 	uint8_t bar;		/* Where to find it. */
-	uint8_t padding[3];	/* Pad to full dword. */
+	uint8_t id;		/* Multiple capabilities of the same type */
+	uint8_t padding[2];	/* Pad to full dword. */
 	uint32_t offset;		/* Offset within bar. */
 	uint32_t length;		/* Length of the structure, in bytes. */
 };
