@@ -119,10 +119,6 @@ void setup_seccomp(bool enable_syslog)
 		exit(1);
 	}
 
-	if (seccomp_attr_set(ctx, SCMP_FLTATR_CTL_TSYNC, 1) != 0) {
-		err(1, "seccomp_attr_set(ctx, SCMP_FLTATTR_CTL_TSYNC, 1)");
-	}
-
 	add_whitelist(ctx, syscall_whitelist, G_N_ELEMENTS(syscall_whitelist));
 	if (enable_syslog) {
 		add_whitelist(ctx, syscall_whitelist_syslog,
