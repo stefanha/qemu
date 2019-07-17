@@ -58,9 +58,21 @@ struct fv_VuDev {
         struct fuse_session *se;
 
         /*
+         * Either handle virtqueues or vhost-user protocol messages.  Don't do
+         * both at the same time since that could lead to race conditions if
+         * virtqueues or memory tables change while another thread is accessing
+         * them.
+         *
+         * The assumptions are:
+         * 1. fv_queue_thread() reads/writes to virtqueues and only reads VuDev.
+         * 2. virtio_loop() reads/writes virtqueues and VuDev.
+         */
+        pthread_rwlock_t vu_dispatch_rwlock;
+
+        /*
          * The following pair of fields are only accessed in the main
          * virtio_loop
-        */
+         */
         size_t nqueues;
         struct fv_QueueInfo **qi;
 };
@@ -435,6 +447,8 @@ static void *fv_queue_thread(void *opaque)
                  __func__, qi->qidx, qi->kick_fd);
         while (1) {
                struct pollfd pf[2];
+               int ret;
+
                pf[0].fd = qi->kick_fd;
                pf[0].events = POLLIN;
                pf[0].revents = 0;
@@ -477,6 +491,11 @@ static void *fv_queue_thread(void *opaque)
                        fuse_log(FUSE_LOG_ERR, "Eventfd_read for queue: %m\n");
                        break;
                }
+
+               /* Mutual exclusion with virtio_loop() */
+               ret = pthread_rwlock_rdlock(&qi->virtio_dev->vu_dispatch_rwlock);
+               assert(ret == 0); /* there is no possible error case */
+
                if (se->debug) {
                        /* out is from guest, in is too guest */
                        unsigned int in_bytes, out_bytes;
@@ -669,6 +688,8 @@ static void *fv_queue_thread(void *opaque)
                        free(elem);
                        elem = NULL;
                 }
+
+                pthread_rwlock_unlock(&qi->virtio_dev->vu_dispatch_rwlock);
         }
         pthread_mutex_destroy(&ch.lock);
         free(fbuf.mem);
@@ -775,6 +796,9 @@ int virtio_loop(struct fuse_session *se)
 
        while (!fuse_session_exited(se)) {
                struct pollfd pf[1];
+               bool ok;
+               int ret;
+
                pf[0].fd = se->vu_socketfd;
                pf[0].events = POLLIN;
                pf[0].revents = 0;
@@ -798,7 +822,16 @@ int virtio_loop(struct fuse_session *se)
                }
                assert(pf[0].revents & POLLIN);
                fuse_log(FUSE_LOG_DEBUG, "%s: Got VU event\n", __func__);
-               if (!vu_dispatch(&se->virtio_dev->dev)) {
+
+               /* Mutual exclusion with fv_queue_thread() */
+               ret = pthread_rwlock_wrlock(&se->virtio_dev->vu_dispatch_rwlock);
+               assert(ret == 0); /* there is no possible error case */
+
+               ok = vu_dispatch(&se->virtio_dev->dev);
+
+               pthread_rwlock_unlock(&se->virtio_dev->vu_dispatch_rwlock);
+
+               if (!ok) {
                        fuse_log(FUSE_LOG_ERR, "%s: vu_dispatch failed\n", __func__);
                        break;
                }
@@ -882,6 +915,7 @@ int virtio_session_mount(struct fuse_session *se)
     /* TODO: Some cleanup/deallocation! */
     se->virtio_dev = calloc(sizeof(struct fv_VuDev), 1);
     se->virtio_dev->se = se;
+    pthread_rwlock_init(&se->virtio_dev->vu_dispatch_rwlock, NULL);
     vu_init(&se->virtio_dev->dev, 2, se->vu_socketfd,
             fv_panic,
             fv_set_watch, fv_remove_watch,
@@ -898,6 +932,7 @@ void virtio_session_close(struct fuse_session *se)
                 return;
 
         free(se->virtio_dev->qi);
+        pthread_rwlock_destroy(&se->virtio_dev->vu_dispatch_rwlock);
         free(se->virtio_dev);
         se->virtio_dev = NULL;
 }
