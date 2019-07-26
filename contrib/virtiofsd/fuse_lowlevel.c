@@ -2152,6 +2152,12 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid,
 	}
 	if (se->conn.proto_minor >= 23)
 		outarg.time_gran = se->conn.time_gran;
+	if (arg->flags & FUSE_MAP_ALIGNMENT) {
+		outarg.flags |= FUSE_MAP_ALIGNMENT;
+
+		/* This constraint comes from mmap(2) and munmap(2) */
+		outarg.map_alignment = ffsl(sysconf(_SC_PAGE_SIZE)) - 1;
+	}
 
 	if (se->debug) {
 		fuse_log(FUSE_LOG_DEBUG, "   INIT: %u.%u\n", outarg.major, outarg.minor);
@@ -2165,6 +2171,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid,
 			outarg.congestion_threshold);
 		fuse_log(FUSE_LOG_DEBUG, "   time_gran=%u\n",
 			outarg.time_gran);
+		fuse_log(FUSE_LOG_DEBUG, "   map_alignment=%u\n",
+			 outarg.map_alignment);
 	}
 	if (arg->minor < 5)
 		outargsize = FUSE_COMPAT_INIT_OUT_SIZE;
