@@ -98,7 +98,12 @@ struct lo_key {
 
 struct lo_inode {
 	int fd;
-	bool is_symlink;
+
+	/* Atomic reference count for this object.  The nlookup field holds a
+	 * reference and release it when nlookup reaches 0.
+	 */
+	gint refcount;
+
 	struct lo_key key;
 
 	/* This counter keeps the inode alive during the FUSE session.
@@ -116,6 +121,8 @@ struct lo_inode {
 	fuse_ino_t fuse_ino;
 	pthread_mutex_t plock_mutex;
 	GHashTable *posix_locks; /* protected by lo_inode->plock_mutex */
+
+	bool is_symlink;
 };
 
 struct lo_cred {
@@ -463,6 +470,23 @@ static ssize_t lo_add_inode_mapping(fuse_req_t req, struct lo_inode *inode)
 	return elem - lo_data(req)->ino_map.elems;
 }
 
+static void lo_inode_put(struct lo_data *lo, struct lo_inode **inodep)
+{
+	struct lo_inode *inode = *inodep;
+
+	if (!inode) {
+		return;
+	}
+
+	*inodep = NULL;
+
+	if (g_atomic_int_dec_and_test(&inode->refcount)) {
+		close(inode->fd);
+		free(inode);
+	}
+}
+
+/* Caller must release refcount using lo_inode_put() */
 static struct lo_inode *lo_inode(fuse_req_t req, fuse_ino_t ino)
 {
 	struct lo_data *lo = lo_data(req);
@@ -470,6 +494,9 @@ static struct lo_inode *lo_inode(fuse_req_t req, fuse_ino_t ino)
 
 	pthread_mutex_lock(&lo->mutex);
 	elem = lo_map_get(&lo->ino_map, ino);
+	if (elem) {
+		g_atomic_int_inc(&elem->inode->refcount);
+	}
 	pthread_mutex_unlock(&lo->mutex);
 
 	if (!elem)
@@ -478,10 +505,22 @@ static struct lo_inode *lo_inode(fuse_req_t req, fuse_ino_t ino)
 	return elem->inode;
 }
 
+/* TODO Remove this helper and force callers to hold an inode refcount until
+ * they are done with the fd.  This will be done in a later patch to make
+ * review easier.
+ */
 static int lo_fd(fuse_req_t req, fuse_ino_t ino)
 {
 	struct lo_inode *inode = lo_inode(req, ino);
-	return inode ? inode->fd : -1;
+	int fd;
+
+	if (!inode) {
+		return -1;
+	}
+
+	fd = inode->fd;
+	lo_inode_put(lo_data(req), &inode);
+	return fd;
 }
 
 static void lo_init(void *userdata,
@@ -535,6 +574,9 @@ static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_attr(req, &buf, lo->timeout);
 }
 
+/* Increments parent->nlookup and caller must release refcount using
+ * lo_inode_put(&parent).
+ */
 static int lo_parent_and_name(struct lo_data *lo, struct lo_inode *inode,
 			      char path[PATH_MAX], struct lo_inode **parent)
 {
@@ -570,6 +612,7 @@ retry:
 		p = &lo->root;
 		pthread_mutex_lock(&lo->mutex);
 		p->nlookup++;
+		g_atomic_int_inc(&p->refcount);
 		pthread_mutex_unlock(&lo->mutex);
 	} else {
 		*last = '\0';
@@ -642,6 +685,7 @@ fallback:
 	if (res != -1) {
 		res = utimensat(parent->fd, path, tv, AT_SYMLINK_NOFOLLOW);
 		unref_inode_lolocked(lo, parent, 1);
+		lo_inode_put(lo, &parent);
 	}
 
 	return res;
@@ -754,11 +798,13 @@ static void lo_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		if (res == -1)
 			goto out_err;
 	}
+	lo_inode_put(lo, &inode);
 
 	return lo_getattr(req, ino, fi);
 
 out_err:
 	saverr = errno;
+	lo_inode_put(lo, &inode);
 	fuse_reply_err(req, saverr);
 }
 
@@ -775,6 +821,7 @@ static struct lo_inode *lo_find(struct lo_data *lo, struct stat *st)
 	if (p) {
 		assert(p->nlookup > 0);
 		p->nlookup++;
+		g_atomic_int_inc(&p->refcount);
 	}
 	pthread_mutex_unlock(&lo->mutex);
 
@@ -794,6 +841,9 @@ static void posix_locks_value_destroy(gpointer data)
 	free(plock);
 }
 
+/* Increments nlookup and caller must release refcount using
+ * lo_inode_put(&parent).
+ */
 static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 			 struct fuse_entry_param *e)
 {
@@ -801,7 +851,8 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 	int res;
 	int saverr;
 	struct lo_data *lo = lo_data(req);
-	struct lo_inode *inode, *dir = lo_inode(req, parent);
+	struct lo_inode *inode = NULL;
+	struct lo_inode *dir = lo_inode(req, parent);
 
 	/*
 	 * name_to_handle_at() and open_by_handle_at() can reach here with fuse
@@ -838,6 +889,10 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 			goto out_err;
 
 		inode->is_symlink = S_ISLNK(e->attr.st_mode);
+
+		/* One for the caller and one for nlookup (released in unref_inode_lolocked()) */
+		g_atomic_int_set(&inode->refcount, 2);
+
 		inode->nlookup = 1;
 		inode->fd = newfd;
 		newfd = -1;
@@ -854,6 +909,8 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		pthread_mutex_unlock(&lo->mutex);
 	}
 	e->ino = inode->fuse_ino;
+	lo_inode_put(lo, &inode);
+	lo_inode_put(lo, &dir);
 
 	fuse_log(FUSE_LOG_DEBUG, "  %lli/%s -> %lli\n",
 		 (unsigned long long) parent, name,
@@ -865,6 +922,8 @@ out_err:
 	saverr = errno;
 	if (newfd != -1)
 		close(newfd);
+	lo_inode_put(lo, &inode);
+	lo_inode_put(lo, &dir);
 	return saverr;
 }
 
@@ -941,6 +1000,7 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 {
 	int res;
 	int saverr;
+	struct lo_data *lo = lo_data(req);
 	struct lo_inode *dir;
 	struct fuse_entry_param e;
 	struct lo_cred old = {};
@@ -980,9 +1040,11 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 		   (unsigned long long) e.ino);
 
 	fuse_reply_entry(req, &e);
+	lo_inode_put(lo, &dir);
 	return;
 
 out:
+	lo_inode_put(lo, &dir);
 	fuse_reply_err(req, saverr);
 }
 
@@ -1032,6 +1094,7 @@ fallback:
 	if (res != -1) {
 		res = linkat(parent->fd, path, dfd, name, 0);
 		unref_inode_lolocked(lo, parent, 1);
+		lo_inode_put(lo, &parent);
 	}
 
 	return res;
@@ -1042,6 +1105,7 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 {
 	int res;
 	struct lo_data *lo = lo_data(req);
+	struct lo_inode *parent_inode;
 	struct lo_inode *inode;
 	struct fuse_entry_param e;
 	int saverr;
@@ -1051,17 +1115,18 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 		return;
 	}
 
+	parent_inode = lo_inode(req, parent);
 	inode = lo_inode(req, ino);
-	if (!inode) {
-		fuse_reply_err(req, EBADF);
-		return;
+	if (!parent_inode || !inode) {
+		errno = EBADF;
+		goto out_err;
 	}
 
 	memset(&e, 0, sizeof(struct fuse_entry_param));
 	e.attr_timeout = lo->timeout;
 	e.entry_timeout = lo->timeout;
 
-	res = linkat_empty_nofollow(lo, inode, lo_fd(req, parent), name);
+	res = linkat_empty_nofollow(lo, inode, parent_inode->fd, name);
 	if (res == -1)
 		goto out_err;
 
@@ -1079,13 +1144,18 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 		   (unsigned long long) e.ino);
 
 	fuse_reply_entry(req, &e);
+	lo_inode_put(lo, &parent_inode);
+	lo_inode_put(lo, &inode);
 	return;
 
 out_err:
 	saverr = errno;
+	lo_inode_put(lo, &parent_inode);
+	lo_inode_put(lo, &inode);
 	fuse_reply_err(req, saverr);
 }
 
+/* Increments nlookup and caller must release refcount using lo_inode_put() */
 static struct lo_inode *lookup_name(fuse_req_t req, fuse_ino_t parent,
 				    const char *name)
 {
@@ -1121,6 +1191,7 @@ static void lo_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	fuse_reply_err(req, res == -1 ? errno : 0);
 	unref_inode_lolocked(lo, inode, 1);
+	lo_inode_put(lo, &inode);
 }
 
 static void lo_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
@@ -1128,14 +1199,23 @@ static void lo_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 		      unsigned int flags)
 {
 	int res;
-	struct lo_inode *oldinode;
-	struct lo_inode *newinode;
+	struct lo_inode *parent_inode;
+	struct lo_inode *newparent_inode;
+	struct lo_inode *oldinode = NULL;
+	struct lo_inode *newinode = NULL;
 	struct lo_data *lo = lo_data(req);
 
 	if (!is_safe_path_component(name) ||
 		!is_safe_path_component(newname)) {
 		fuse_reply_err(req, EINVAL);
 		return;
+	}
+
+	parent_inode = lo_inode(req, parent);
+	newparent_inode = lo_inode(req, newparent);
+	if (!parent_inode || !newparent_inode) {
+		fuse_reply_err(req, EBADF);
+		goto out;
 	}
 
 	oldinode = lookup_name(req, parent, name);
@@ -1150,8 +1230,8 @@ static void lo_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 #ifndef SYS_renameat2
 		fuse_reply_err(req, EINVAL);
 #else
-		res = syscall(SYS_renameat2, lo_fd(req, parent), name,
-			      lo_fd(req, newparent), newname, flags);
+		res = syscall(SYS_renameat2, parent_inode->fd, name,
+			      newparent_inode->fd, newname, flags);
 		if (res == -1 && errno == ENOSYS)
 			fuse_reply_err(req, EINVAL);
 		else
@@ -1160,13 +1240,16 @@ static void lo_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 		goto out;
 	}
 
-	res = renameat(lo_fd(req, parent), name,
-			lo_fd(req, newparent), newname);
+	res = renameat(parent_inode->fd, name, newparent_inode->fd, newname);
 
 	fuse_reply_err(req, res == -1 ? errno : 0);
 out:
 	unref_inode_lolocked(lo, oldinode, 1);
 	unref_inode_lolocked(lo, newinode, 1);
+	lo_inode_put(lo, &oldinode);
+	lo_inode_put(lo, &newinode);
+	lo_inode_put(lo, &parent_inode);
+	lo_inode_put(lo, &newparent_inode);
 }
 
 static void lo_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
@@ -1190,6 +1273,7 @@ static void lo_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	fuse_reply_err(req, res == -1 ? errno : 0);
 	unref_inode_lolocked(lo, inode, 1);
+	lo_inode_put(lo, &inode);
 }
 
 static void unref_inode_lolocked(struct lo_data *lo, struct lo_inode *inode, uint64_t n)
@@ -1209,8 +1293,9 @@ static void unref_inode_lolocked(struct lo_data *lo, struct lo_inode *inode, uin
 		g_hash_table_destroy(inode->posix_locks);
 		pthread_mutex_destroy(&inode->plock_mutex);
 		pthread_mutex_unlock(&lo->mutex);
-		close(inode->fd);
-		free(inode);
+
+		/* Drop our refcount from lo_do_lookup() */
+		lo_inode_put(lo, &inode);
 	} else {
 		pthread_mutex_unlock(&lo->mutex);
 	}
@@ -1225,6 +1310,7 @@ static int unref_all_inodes_cb(gpointer key, gpointer value,
 	inode->nlookup = 0;
 	lo_map_remove(&lo->ino_map, inode->fuse_ino);
 	close(inode->fd);
+	lo_inode_put(lo, &inode); /* Drop our refcount from lo_do_lookup() */
 
 	return TRUE;
 }
@@ -1252,6 +1338,7 @@ static void lo_forget_one(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 		(unsigned long long) nlookup);
 
 	unref_inode_lolocked(lo, inode, nlookup);
+	lo_inode_put(lo, &inode);
 }
 
 static void lo_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
@@ -1470,6 +1557,7 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
     err = 0;
 error:
     lo_dirp_put(&d);
+    lo_inode_put(lo, &dinode);
 
     // If there's an error, we can only signal it if we haven't stored
     // any entries yet - otherwise we'd end up with wrong lookup
@@ -1524,6 +1612,7 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 {
 	int fd;
 	struct lo_data *lo = lo_data(req);
+	struct lo_inode *parent_inode;
 	struct fuse_entry_param e;
 	int err;
 	struct lo_cred old = {};
@@ -1535,11 +1624,17 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 		return;
 	}
 
+	parent_inode = lo_inode(req, parent);
+	if (!parent_inode) {
+		fuse_reply_err(req, EBADF);
+		return;
+	}
+
 	err = lo_change_cred(req, &old);
 	if (err)
 		goto out;
 
-	fd = openat(lo_fd(req, parent), name,
+	fd = openat(parent_inode->fd, name,
 		    (fi->flags | O_CREAT) & ~O_NOFOLLOW, mode);
 	err = fd == -1 ? errno : 0;
 	lo_restore_cred(&old);
@@ -1552,8 +1647,8 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 		pthread_mutex_unlock(&lo->mutex);
 		if (fh == -1) {
 			close(fd);
-			fuse_reply_err(req, ENOMEM);
-			return;
+			err = ENOMEM;
+			goto out;
 		}
 
 		fi->fh = fh;
@@ -1565,6 +1660,8 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 		fi->keep_cache = 1;
 
 out:
+	lo_inode_put(lo, &parent_inode);
+
 	if (err)
 		fuse_reply_err(req, err);
 	else
@@ -1633,15 +1730,17 @@ static void lo_getlk(fuse_req_t req, fuse_ino_t ino,
 	plock = lookup_create_plock_ctx(lo, inode, fi->lock_owner, lock->l_pid,
 			&ret);
 	if (!plock) {
-		pthread_mutex_unlock(&inode->plock_mutex);
-		fuse_reply_err(req, ret);
-		return;
+		saverr = ret;
+		goto out;
 	}
 
 	ret = fcntl(plock->fd, F_OFD_GETLK, lock);
 	if (ret == -1)
 		saverr = errno;
+
+out:
 	pthread_mutex_unlock(&inode->plock_mutex);
+	lo_inode_put(lo, &inode);
 
 	if (saverr)
 		fuse_reply_err(req, saverr);
@@ -1679,9 +1778,8 @@ static void lo_setlk(fuse_req_t req, fuse_ino_t ino,
 			&ret);
 
 	if (!plock) {
-		pthread_mutex_unlock(&inode->plock_mutex);
-		fuse_reply_err(req, ret);
-		return;
+		saverr = ret;
+		goto out;
 	}
 
 	/* TODO: Is it alright to modify flock? */
@@ -1690,7 +1788,11 @@ static void lo_setlk(fuse_req_t req, fuse_ino_t ino,
 	if (ret == -1) {
 		saverr = errno;
 	}
+
+out:
 	pthread_mutex_unlock(&inode->plock_mutex);
+	lo_inode_put(lo, &inode);
+
 	fuse_reply_err(req, saverr);
 }
 
@@ -1807,6 +1909,7 @@ static void lo_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	pthread_mutex_unlock(&inode->plock_mutex);
 
 	res = close(dup(lo_fi_fd(req, fi)));
+	lo_inode_put(lo_data(req), &inode);
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
@@ -2005,11 +2108,14 @@ out_free:
 	if (fd >= 0) {
 		close(fd);
 	}
+
+	lo_inode_put(lo, &inode);
 	return;
 
 out_err:
 	saverr = errno;
 out:
+	lo_inode_put(lo, &inode);
 	fuse_reply_err(req, saverr);
 	goto out_free;
 }
@@ -2074,11 +2180,14 @@ out_free:
 	if (fd >= 0) {
 		close(fd);
 	}
+
+	lo_inode_put(lo, &inode);
 	return;
 
 out_err:
 	saverr = errno;
 out:
+	lo_inode_put(lo, &inode);
 	fuse_reply_err(req, saverr);
 	goto out_free;
 }
@@ -2127,6 +2236,8 @@ out:
 	if (fd >= 0) {
 		close(fd);
 	}
+
+	lo_inode_put(lo, &inode);
 	fuse_reply_err(req, saverr);
 }
 
@@ -2172,6 +2283,8 @@ out:
 	if (fd >= 0) {
 		close(fd);
 	}
+
+	lo_inode_put(lo, &inode);
 	fuse_reply_err(req, saverr);
 }
 
@@ -2495,6 +2608,7 @@ static void setup_root(struct lo_data *lo, struct lo_inode *root)
 	root->key.ino = stat.st_ino;
 	root->key.dev = stat.st_dev;
 	root->nlookup = 2;
+	g_atomic_int_set(&root->refcount, 2);
 }
 
 static guint lo_key_hash(gconstpointer key)
