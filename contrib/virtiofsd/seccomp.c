@@ -59,6 +59,7 @@ static const int syscall_whitelist[] = {
 	SCMP_SYS(open),
 	SCMP_SYS(openat),
 	SCMP_SYS(ppoll),
+	SCMP_SYS(prctl), /* TODO restrict to just PR_SET_NAME? */
 	SCMP_SYS(preadv),
 	SCMP_SYS(pwrite64),
 	SCMP_SYS(read),
