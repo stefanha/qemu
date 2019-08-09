@@ -714,14 +714,12 @@ static void *fv_queue_thread(void *opaque)
 
                pthread_mutex_lock(&qi->vq_lock);
 
-               if (se->debug) {
-                       /* out is from guest, in is too guest */
-                       unsigned int in_bytes, out_bytes;
-                       vu_queue_get_avail_bytes(dev, q, &in_bytes, &out_bytes, ~0, ~0);
+	       /* out is from guest, in is too guest */
+	       unsigned int in_bytes, out_bytes;
+	       vu_queue_get_avail_bytes(dev, q, &in_bytes, &out_bytes, ~0, ~0);
 
-                       fuse_log(FUSE_LOG_DEBUG, "%s: Queue %d gave evalue: %zx available: in: %u out: %u\n",
-                                __func__, qi->qidx, (size_t)evalue, in_bytes, out_bytes);
-               }
+               fuse_log(FUSE_LOG_DEBUG, "%s: Queue %d gave evalue: %zx available: in: %u out: %u\n",
+		        __func__, qi->qidx, (size_t)evalue, in_bytes, out_bytes);
 
                while (1) {
                        unsigned int bad_in_num = 0, bad_out_num = 0;

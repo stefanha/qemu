@@ -154,20 +154,17 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 	struct fuse_out_header *out = iov[0].iov_base;
 
 	out->len = iov_length(iov, count);
-	if (se->debug) {
-		if (out->unique == 0) {
-			fuse_log(FUSE_LOG_DEBUG, "NOTIFY: code=%d length=%u\n",
-				out->error, out->len);
-		} else if (out->error) {
-			fuse_log(FUSE_LOG_DEBUG,
-				"   unique: %llu, error: %i (%s), outsize: %i\n",
-				(unsigned long long) out->unique, out->error,
-				strerror(-out->error), out->len);
-		} else {
-			fuse_log(FUSE_LOG_DEBUG,
-				"   unique: %llu, success, outsize: %i\n",
-				(unsigned long long) out->unique, out->len);
-		}
+	if (out->unique == 0) {
+		fuse_log(FUSE_LOG_DEBUG, "NOTIFY: code=%d length=%u\n",
+			   out->error, out->len);
+	} else if (out->error) {
+		fuse_log(FUSE_LOG_DEBUG, "   unique: %llu, error: %i (%s), outsize: %i\n",
+			   (unsigned long long) out->unique,
+			   out->error, strerror(-out->error),
+			   out->len);
+	} else {
+		fuse_log(FUSE_LOG_DEBUG, "   unique: %llu, success, outsize: %i\n",
+			   (unsigned long long) out->unique, out->len);
 	}
 
         if (fuse_lowlevel_is_virtio(se)) {
@@ -1676,9 +1673,8 @@ static void do_interrupt(fuse_req_t req, fuse_ino_t nodeid,
 		return;
 	}
 
-	if (se->debug)
-		fuse_log(FUSE_LOG_DEBUG, "INTERRUPT: %llu\n",
-			(unsigned long long) arg->unique);
+	fuse_log(FUSE_LOG_DEBUG, "INTERRUPT: %llu\n",
+		 (unsigned long long) arg->unique);
 
 	req->u.i.unique = arg->unique;
 
@@ -1960,13 +1956,11 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid,
 		}
 	}
 
-	if (se->debug) {
-		fuse_log(FUSE_LOG_DEBUG, "INIT: %u.%u\n", arg->major, arg->minor);
-		if (arg->major == 7 && arg->minor >= 6) {
-			fuse_log(FUSE_LOG_DEBUG, "flags=0x%08x\n", arg->flags);
-			fuse_log(FUSE_LOG_DEBUG, "max_readahead=0x%08x\n",
-				arg->max_readahead);
-		}
+	fuse_log(FUSE_LOG_DEBUG, "INIT: %u.%u\n", arg->major, arg->minor);
+	if (arg->major == 7 && arg->minor >= 6) {
+		fuse_log(FUSE_LOG_DEBUG, "flags=0x%08x\n", arg->flags);
+		fuse_log(FUSE_LOG_DEBUG, "max_readahead=0x%08x\n",
+			   arg->max_readahead);
 	}
 	se->conn.proto_major = arg->major;
 	se->conn.proto_minor = arg->minor;
@@ -2161,21 +2155,18 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid,
 		outarg.map_alignment = ffsl(sysconf(_SC_PAGE_SIZE)) - 1;
 	}
 
-	if (se->debug) {
-		fuse_log(FUSE_LOG_DEBUG, "   INIT: %u.%u\n", outarg.major, outarg.minor);
-		fuse_log(FUSE_LOG_DEBUG, "   flags=0x%08x\n", outarg.flags);
-		fuse_log(FUSE_LOG_DEBUG, "   max_readahead=0x%08x\n",
-			outarg.max_readahead);
-		fuse_log(FUSE_LOG_DEBUG, "   max_write=0x%08x\n", outarg.max_write);
-		fuse_log(FUSE_LOG_DEBUG, "   max_background=%i\n",
-			outarg.max_background);
-		fuse_log(FUSE_LOG_DEBUG, "   congestion_threshold=%i\n",
-			outarg.congestion_threshold);
-		fuse_log(FUSE_LOG_DEBUG, "   time_gran=%u\n",
-			outarg.time_gran);
-		fuse_log(FUSE_LOG_DEBUG, "   map_alignment=%u\n",
-			 outarg.map_alignment);
-	}
+	fuse_log(FUSE_LOG_DEBUG, "   INIT: %u.%u\n", outarg.major, outarg.minor);
+	fuse_log(FUSE_LOG_DEBUG, "   flags=0x%08x\n", outarg.flags);
+	fuse_log(FUSE_LOG_DEBUG, "   max_readahead=0x%08x\n",
+		   outarg.max_readahead);
+	fuse_log(FUSE_LOG_DEBUG, "   max_write=0x%08x\n", outarg.max_write);
+	fuse_log(FUSE_LOG_DEBUG, "   max_background=%i\n",
+		   outarg.max_background);
+	fuse_log(FUSE_LOG_DEBUG, "   congestion_threshold=%i\n",
+		   outarg.congestion_threshold);
+	fuse_log(FUSE_LOG_DEBUG, "   time_gran=%u\n",
+		   outarg.time_gran);
+	fuse_log(FUSE_LOG_DEBUG, "   map_alignment=%u\n", outarg.map_alignment);
 	if (arg->minor < 5)
 		outargsize = FUSE_COMPAT_INIT_OUT_SIZE;
 	else if (arg->minor < 23)
@@ -2466,13 +2457,12 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 	in = fuse_mbuf_iter_advance(&iter, sizeof(*in));
 	assert(in); /* caller guarantees the input buffer is large enough */
 
-	if (se->debug) {
-		fuse_log(FUSE_LOG_DEBUG,
-			"unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
-			(unsigned long long) in->unique,
-			opname((enum fuse_opcode) in->opcode), in->opcode,
-			(unsigned long long) in->nodeid, buf->size, in->pid);
-	}
+	fuse_log(FUSE_LOG_DEBUG,
+                 "unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
+		 (unsigned long long) in->unique,
+		 opname((enum fuse_opcode) in->opcode), in->opcode,
+		 (unsigned long long) in->nodeid, buf->size,
+		 in->pid);
 
 	req = fuse_ll_alloc_req(se);
 	if (req == NULL) {
@@ -2519,8 +2509,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 			// TODO: This is after a hard reboot typically, we need to do
 			// a destroy, but we can't reply to this request yet so
 			// we can't use do_destroy
-	                if (se->debug)
-                		fuse_log(FUSE_LOG_DEBUG, "%s: reinit\n", __func__);
+			fuse_log(FUSE_LOG_DEBUG, "%s: reinit\n", __func__);
 			se->got_destroy = 1;
 			se->got_init = 0;
                         if (se->op.destroy)
