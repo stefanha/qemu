@@ -350,6 +350,9 @@ typedef struct VuVirtq {
     int err_fd;
     unsigned int enable;
     bool started;
+
+    /* Guest addresses of our ring */
+    struct vhost_vring_addr vra;
 } VuVirtq;
 
 enum VuWatchCondtion {
