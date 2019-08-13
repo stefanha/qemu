@@ -15,6 +15,7 @@
 #include "fuse_misc.h"
 #include "fuse_virtio.h"
 
+#include <glib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -2610,6 +2611,11 @@ void fuse_session_destroy(struct fuse_session *se)
 
 	free(se->vu_socket_path);
 	se->vu_socket_path = NULL;
+
+	if (se->vu_socket_lock) {
+		g_free(se->vu_socket_lock);
+		se->vu_socket_lock = NULL;
+	}
 
 	free(se);
 }

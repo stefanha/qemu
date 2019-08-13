@@ -73,6 +73,7 @@ struct fuse_session {
         char *vu_socket_path;
         int   vu_listen_fd;
         int   vu_socketfd;
+        char *vu_socket_lock;
         struct fv_VuDev *virtio_dev;
         int thread_pool_size;
 };
