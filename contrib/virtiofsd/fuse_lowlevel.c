@@ -1164,6 +1164,7 @@ static void do_write(fuse_req_t req, fuse_ino_t nodeid,
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 	fi.writepage = (arg->write_flags & FUSE_WRITE_CACHE) != 0;
+	fi.kill_priv = !!(arg->write_flags & FUSE_WRITE_KILL_PRIV);
 
 	if (!compat) {
 		fi.lock_owner = arg->lock_owner;
@@ -1211,6 +1212,7 @@ static void do_write_buf(fuse_req_t req, fuse_ino_t nodeid,
 
 	fi.fh = arg->fh;
 	fi.writepage = !!(arg->write_flags & FUSE_WRITE_CACHE);
+	fi.kill_priv = !!(arg->write_flags & FUSE_WRITE_KILL_PRIV);
 
         if (ibufv->count == 1) {
 		assert(!(tmpbufv.buf[0].flags & FUSE_BUF_IS_FD));
