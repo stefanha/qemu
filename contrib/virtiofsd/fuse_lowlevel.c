@@ -1210,7 +1210,7 @@ static void do_write_buf(fuse_req_t req, fuse_ino_t nodeid,
 	}
 
 	fi.fh = arg->fh;
-	fi.writepage = arg->write_flags & FUSE_WRITE_CACHE;
+	fi.writepage = !!(arg->write_flags & FUSE_WRITE_CACHE);
 
         if (ibufv->count == 1) {
 		assert(!(tmpbufv.buf[0].flags & FUSE_BUF_IS_FD));
