@@ -15,6 +15,7 @@
 #include "fuse_misc.h"
 #include "fuse_virtio.h"
 
+#include <glib.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
