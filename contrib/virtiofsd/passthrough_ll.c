@@ -56,6 +56,7 @@
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/capability.h>
 
 #include "ireg.h"
 #include <sys/mount.h>
@@ -231,6 +232,115 @@ static int is_safe_path_component(const char *path)
 static struct lo_data *lo_data(fuse_req_t req)
 {
 	return (struct lo_data *) fuse_req_userdata(req);
+}
+
+/* Helpers for dropping and regaining effective capabilities. Returns 0
+ * on success, error otherwise  */
+static int drop_effective_cap(const char *cap_name, bool *cap_dropped)
+{
+	cap_t caps;
+	cap_value_t cap;
+	cap_flag_value_t cap_value;
+	int ret = 0;
+
+	ret = cap_from_name(cap_name, &cap);
+	if (ret == -1) {
+		ret = errno;
+		fuse_log(FUSE_LOG_ERR, "cap_from_name(%s) failed:%s\n", cap_name,
+			 strerror(errno));
+		goto out;
+	}
+
+	if (!CAP_IS_SUPPORTED(cap)) {
+		fuse_log(FUSE_LOG_ERR, "capability(%s) is not supported\n", cap_name);
+		return EINVAL;
+	}
+
+	caps = cap_get_proc();
+	if (caps == NULL) {
+		ret = errno;
+		fuse_log(FUSE_LOG_ERR, "cap_get_proc() failed\n");
+		goto out;
+	}
+
+	if (cap_get_flag(caps, cap, CAP_EFFECTIVE, &cap_value) == -1) {
+		ret = errno;
+		fuse_log(FUSE_LOG_ERR, "cap_get_flag() failed\n");
+		goto out_cap_free;
+	}
+
+	/* We dont have this capability in effective set already. */
+	if (cap_value == CAP_CLEAR) {
+		ret = 0;
+		goto out_cap_free;
+	}
+
+	if (cap_set_flag(caps, CAP_EFFECTIVE, 1, &cap, CAP_CLEAR) == -1) {
+		ret = errno;
+		fuse_log(FUSE_LOG_ERR, "cap_set_flag() failed\n");
+		goto out_cap_free;
+	}
+
+	if (cap_set_proc(caps) == -1) {
+		ret = errno;
+		fuse_log(FUSE_LOG_ERR, "cap_set_procs() failed\n");
+		goto out_cap_free;
+	}
+
+	ret = 0;
+	if (cap_dropped)
+		*cap_dropped = true;
+
+out_cap_free:
+	cap_free(caps);
+out:
+	return ret;
+}
+
+static int gain_effective_cap(const char *cap_name)
+{
+	cap_t caps;
+	cap_value_t cap;
+	int ret = 0;
+
+	ret = cap_from_name(cap_name, &cap);
+	if (ret == -1) {
+		ret = errno;
+		fuse_log(FUSE_LOG_ERR, "cap_from_name(%s) failed:%s\n", cap_name,
+			 strerror(errno));
+		goto out;
+	}
+
+	if (!CAP_IS_SUPPORTED(cap)) {
+		fuse_log(FUSE_LOG_ERR, "capability(%s) is not supported\n", cap_name);
+		return EINVAL;
+	}
+
+	caps = cap_get_proc();
+	if (caps == NULL) {
+		ret = errno;
+		fuse_log(FUSE_LOG_ERR, "cap_get_proc() failed\n");
+		goto out;
+	}
+
+
+	if (cap_set_flag(caps, CAP_EFFECTIVE, 1, &cap, CAP_SET) == -1) {
+		ret = errno;
+		fuse_log(FUSE_LOG_ERR, "cap_set_flag() failed\n");
+		goto out_cap_free;
+	}
+
+	if (cap_set_proc(caps) == -1) {
+		ret = errno;
+		fuse_log(FUSE_LOG_ERR, "cap_set_procs() failed\n");
+		goto out_cap_free;
+	}
+	ret = 0;
+
+out_cap_free:
+	cap_free(caps);
+out:
+	return ret;
 }
 
 static void lo_map_init(struct lo_map *map)
@@ -2008,6 +2118,7 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
 	ssize_t res;
 	struct fuse_bufvec out_buf = FUSE_BUFVEC_INIT(fuse_buf_size(in_buf));
 	struct lo_data *lo = lo_data(req);
+	bool cap_fsetid_dropped = false;
 
 	out_buf.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
 	out_buf.buf[0].fd = lo_fi_fd(req, fi);
@@ -2016,6 +2127,16 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
 	if (lo_debug(req))
 		fuse_log(FUSE_LOG_DEBUG, "lo_write_buf(ino=%" PRIu64 ", size=%zd, off=%lu)\n",
 			ino, out_buf.buf[0].size, (unsigned long) off);
+
+	/*
+	 * If kill_priv is set, drop CAP_FSETID which should lead to kernel
+	 * clearing setuid/setgid on file.
+	 */
+	if (fi->kill_priv) {
+		res = drop_effective_cap("cap_fsetid", &cap_fsetid_dropped);
+		if (res != 0)
+			fuse_reply_err(req, res);
+	}
 
 	res = fuse_buf_copy(req, &out_buf, in_buf, 0);
 	if(res < 0) {
@@ -2030,6 +2151,12 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
 		}
 
 		fuse_reply_write(req, (size_t) res);
+	}
+
+	if (cap_fsetid_dropped) {
+		res = gain_effective_cap("cap_fsetid");
+		if (res)
+			fuse_log(FUSE_LOG_ERR, "Failed to gain CAP_FSETID\n");
 	}
 }
 
