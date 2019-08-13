@@ -11,3 +11,5 @@ virtiofsd-obj-y = buffer.o \
 
 seccomp.o-cflags := $(SECCOMP_CFLAGS)
 seccomp.o-libs := $(SECCOMP_LIBS)
+
+passthrough_ll.o-libs += -lcap
