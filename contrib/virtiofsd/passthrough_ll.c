@@ -2420,55 +2420,6 @@ static void setup_shared_versions(struct lo_data *lo)
 	lo->version_table = addr;
 }
 
-/* Remount with MS_SLAVE so our mounts don't affect the outside world */
-static void setup_remount_slave(void)
-{
-	gchar *mountinfo = NULL;
-	gchar *line;
-	gchar *nextline;
-
-	if (!g_file_get_contents("/proc/self/mountinfo", &mountinfo, NULL, NULL)) {
-		fuse_log(FUSE_LOG_ERR, "unable to read /proc/self/mountinfo\n");
-		exit(EXIT_FAILURE);
-	}
-
-	for (line = mountinfo; line; line = nextline) {
-		gchar **fields = NULL;
-		char *eol;
-
-		nextline = NULL;
-
-		eol = strchr(line, '\n');
-		if (eol) {
-			*eol = '\0';
-			nextline = eol + 1;
-		}
-
-		/*
-		 * The line format is:
-		 * 442 441 253:4 / / rw,relatime shared:1 - xfs /dev/sda1 rw
-		 */
-		fields = g_strsplit(line, " ", -1);
-		if (!fields[0] || !fields[1] || !fields[2] || !fields[3] ||
-		    !fields[4] || !fields[5] || !fields[6]) {
-			goto next; /* parsing failed, skip line */
-		}
-
-		if (!strstr(fields[6], "shared")) {
-			goto next; /* not shared, skip line */
-		}
-
-		if (mount(NULL, fields[4], NULL, MS_SLAVE, NULL) < 0) {
-			err(1, "mount(%s, MS_SLAVE)", fields[4]);
-		}
-
-next:
-		g_strfreev(fields);
-	}
-
-	g_free(mountinfo);
-}
-
 /* This magic is based on lxc's lxc_pivot_root() */
 static void setup_pivot_root(const char *source)
 {
@@ -2532,7 +2483,10 @@ static void setup_mount_namespace(const char *source)
 		exit(1);
 	}
 
-	setup_remount_slave();
+	if (mount(NULL, "/", NULL, MS_REC|MS_SLAVE, NULL) < 0) {
+		fuse_log(FUSE_LOG_ERR, "mount(/, MS_REC|MS_PRIVATE): %m\n");
+		exit(1);
+	}
 
 	if (mount(source, source, NULL, MS_BIND, NULL) < 0) {
 		fuse_log(FUSE_LOG_ERR, "mount(%s, %s, MS_BIND): %m\n", source, source);
