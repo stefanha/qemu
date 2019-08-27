@@ -316,6 +316,8 @@ HELPERS-y =
 HELPERS-$(call land,$(CONFIG_SOFTMMU),$(CONFIG_LINUX)) = qemu-bridge-helper$(EXESUF)
 
 ifdef CONFIG_LINUX
+HELPERS-y += virtiofsd$(EXESUF)
+
 ifdef CONFIG_VIRGL
 ifdef CONFIG_GBM
 HELPERS-y += vhost-user-gpu$(EXESUF)
