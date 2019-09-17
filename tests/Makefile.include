@@ -718,6 +718,7 @@ qos-test-obj-y += tests/libqos/sdhci.o
 qos-test-obj-y += tests/libqos/tpci200.o
 qos-test-obj-y += tests/libqos/virtio.o
 qos-test-obj-$(CONFIG_VIRTFS) += tests/libqos/virtio-9p.o
+qos-test-obj-$(CONFIG_VHOST_USER_FS) += tests/libqos/virtio-fs.o
 qos-test-obj-y += tests/libqos/virtio-balloon.o
 qos-test-obj-y += tests/libqos/virtio-blk.o
 qos-test-obj-y += tests/libqos/virtio-mmio.o
@@ -759,6 +760,7 @@ qos-test-obj-y += tests/spapr-phb-test.o
 qos-test-obj-y += tests/tmp105-test.o
 qos-test-obj-y += tests/usb-hcd-ohci-test.o $(libqos-usb-obj-y)
 qos-test-obj-$(CONFIG_VHOST_NET_USER) += tests/vhost-user-test.o $(chardev-obj-y) $(test-io-obj-y)
+qos-test-obj-$(CONFIG_VHOST_USER_FS) += tests/vhost-user-fs-test.o
 qos-test-obj-y += tests/virtio-test.o
 qos-test-obj-$(CONFIG_VIRTFS) += tests/virtio-9p-test.o
 qos-test-obj-y += tests/virtio-blk-test.o
@@ -907,7 +909,8 @@ endef
 $(patsubst %, check-qtest-%, $(QTEST_TARGETS)): check-qtest-%: %-softmmu/all $(check-qtest-y)
 	$(call do_test_human,$(check-qtest-$*-y) $(check-qtest-generic-y), \
 	  QTEST_QEMU_BINARY=$*-softmmu/qemu-system-$* \
-	  QTEST_QEMU_IMG=qemu-img$(EXESUF))
+	  QTEST_QEMU_IMG=qemu-img$(EXESUF) \
+	  QTEST_VIRTIOFSD=virtiofsd$(EXESUF))
 
 check-unit: $(check-unit-y)
 	$(call do_test_human, $^)
@@ -920,7 +923,8 @@ check-speed: $(check-speed-y)
 $(patsubst %, check-report-qtest-%.tap, $(QTEST_TARGETS)): check-report-qtest-%.tap: %-softmmu/all $(check-qtest-y)
 	$(call do_test_tap, $(check-qtest-$*-y) $(check-qtest-generic-y), \
 	  QTEST_QEMU_BINARY=$*-softmmu/qemu-system-$* \
-	  QTEST_QEMU_IMG=qemu-img$(EXESUF))
+	  QTEST_QEMU_IMG=qemu-img$(EXESUF) \
+	  QTEST_VIRTIOFSD=virtiofsd$(EXESUF))
 
 check-report-unit.tap: $(check-unit-y)
 	$(call do_test_tap,$^)
