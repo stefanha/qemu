@@ -603,6 +603,7 @@ void qos_add_test(const char *name, const char *interface,
     assert(!opts->edge.size_arg);
 
     node->u.test.before = opts->before;
+    node->u.test.after = opts->after;
     node->u.test.subprocess = opts->subprocess;
     node->available = true;
     add_edge(interface, test_name, QEDGE_CONSUMED_BY, &opts->edge);

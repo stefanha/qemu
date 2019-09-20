@@ -273,6 +273,7 @@ void *qos_allocate_objects(QTestState *qts, QGuestAllocator **p_alloc)
  * 3) call all nodes constructor and get_driver/get_device depending on edge,
  *    start the hardware (*_device_enable functions)
  * 4) start test
+ * 5) @after test function as defined in the given QOSGraphTestOptions
  */
 static void run_one_test(const void *arg)
 {
@@ -296,6 +297,11 @@ static void run_one_test(const void *arg)
 
     obj = qos_allocate_objects(global_qtest, &alloc);
     test_node->u.test.function(obj, test_arg, alloc);
+
+    /* After test */
+    if (test_node->u.test.after) {
+        test_node->u.test.after(test_arg);
+    }
 }
 
 static void subprocess_run_one_test(const void *arg)

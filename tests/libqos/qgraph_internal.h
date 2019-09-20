@@ -68,6 +68,7 @@ struct QOSGraphNode {
             QOSTestFunc function;
             void *arg;
             QOSBeforeTest before;
+            QOSAfterTest after;
             bool subprocess;
         } test;
     } u;

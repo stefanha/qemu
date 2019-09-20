@@ -47,6 +47,7 @@ typedef void (*QOSStartFunct) (QOSGraphObject *object);
 
 /* Test options functions */
 typedef void *(*QOSBeforeTest) (GString *cmd_line, void *arg);
+typedef void (*QOSAfterTest) (void *arg);
 
 /**
  * SECTION: qgraph.h
@@ -341,6 +342,7 @@ struct QOSGraphTestOptions {
                                  * additional parameters to the command line
                                  * and modify the argument to the test function.
                                  */
+    QOSAfterTest after;         /* executed after the test */
     bool subprocess;            /* run the test in a subprocess */
 };
 
