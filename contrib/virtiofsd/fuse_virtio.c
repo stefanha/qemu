@@ -112,7 +112,8 @@ static void fv_set_features(VuDev *dev, uint64_t features)
 {
 }
 
-/* Callback from libvhost-user if there's a new fd we're supposed to listen
+/*
+ * Callback from libvhost-user if there's a new fd we're supposed to listen
  * to, typically a queue kick?
  */
 static void fv_set_watch(VuDev *dev, int fd, int condition, vu_watch_cb cb,
@@ -121,8 +122,7 @@ static void fv_set_watch(VuDev *dev, int fd, int condition, vu_watch_cb cb,
     fuse_log(FUSE_LOG_WARNING, "%s: TODO! fd=%d\n", __func__, fd);
 }
 
-/* Callback from libvhost-user if we're no longer supposed to listen on an fd
- */
+/* Callback from libvhost-user if we're no longer supposed to listen on an fd */
 static void fv_remove_watch(VuDev *dev, int fd)
 {
     fuse_log(FUSE_LOG_WARNING, "%s: TODO! fd=%d\n", __func__, fd);
@@ -136,7 +136,8 @@ static void fv_panic(VuDev *dev, const char *err)
     exit(EXIT_FAILURE);
 }
 
-/* Copy from an iovec into a fuse_buf (memory only)
+/*
+ * Copy from an iovec into a fuse_buf (memory only)
  * Caller must ensure there is space
  */
 static void copy_from_iov(struct fuse_buf *buf, size_t out_num,
@@ -153,7 +154,8 @@ static void copy_from_iov(struct fuse_buf *buf, size_t out_num,
     }
 }
 
-/* Copy from one iov to another, the given number of bytes
+/*
+ * Copy from one iov to another, the given number of bytes
  * The caller must have checked sizes.
  */
 static void copy_iov(struct iovec *src_iov, int src_count,
@@ -169,9 +171,7 @@ static void copy_iov(struct iovec *src_iov, int src_count,
         if (src_len > to_copy) {
             src_len = to_copy;
         }
-        /* Inner loop copies contents of one 'src' to maybe multiple
-         * dst.
-         */
+        /* Inner loop copies contents of one 'src' to maybe multiple dst. */
         while (src_len) {
             assert(dst_count);
             size_t dst_len = dst_iov[0].iov_len - dst_offset;
@@ -198,7 +198,8 @@ static void copy_iov(struct iovec *src_iov, int src_count,
     }
 }
 
-/* Called back by ll whenever it wants to send a reply/message back
+/*
+ * Called back by ll whenever it wants to send a reply/message back
  * The 1st element of the iov starts with the fuse_out_header
  * 'unique'==0 means it's a notify message.
  */
@@ -264,7 +265,8 @@ err:
     return ret;
 }
 
-/* Callback from fuse_send_data_iov_* when it's virtio and the buffer
+/*
+ * Callback from fuse_send_data_iov_* when it's virtio and the buffer
  * is a single FD with FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK
  * We need send the iov and then the buffer.
  * Return 0 on success
@@ -308,7 +310,8 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
     fuse_log(FUSE_LOG_DEBUG, "%s: elem %d: with %d in desc of length %zd\n",
              __func__, elem->index, in_num, in_len);
 
-    /* The elem should have room for a 'fuse_out_header' (out from fuse)
+    /*
+     * The elem should have room for a 'fuse_out_header' (out from fuse)
      * plus the data based on the len in the header.
      */
     if (in_len_writeable < sizeof(struct fuse_out_header)) {
@@ -323,12 +326,13 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
         ret = -E2BIG;
         goto err;
     }
-    // TODO: Limit to 'len'
+    /* TODO: Limit to 'len' */
 
     /* First copy the header data from iov->in_sg */
     copy_iov(iov, count, in_sg, in_num, iov_len);
 
-    /* Build a copy of the the in_sg iov so we can skip bits in it,
+    /*
+     * Build a copy of the the in_sg iov so we can skip bits in it,
      * including changing the offsets
      */
     struct iovec *in_sg_cpy = calloc(sizeof(struct iovec), in_num);
@@ -430,7 +434,7 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
     }
     free(in_sg_cpy);
 
-    // Need to fix out->len on EOF
+    /* Need to fix out->len on EOF */
     if (len) {
         struct fuse_out_header *out_sg = in_sg[0].iov_base;
 
@@ -448,8 +452,9 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
     pthread_rwlock_unlock(&qi->virtio_dev->vu_dispatch_rwlock);
 
 err:
-    if (ret == 0)
+    if (ret == 0) {
         req->reply_sent = true;
+    }
 
     return ret;
 }
@@ -469,7 +474,8 @@ static void fv_queue_worker(gpointer data, gpointer user_data)
 
     assert(se->bufsize > sizeof(struct fuse_in_header));
 
-    /* An element contains one request and the space to send our response
+    /*
+     * An element contains one request and the space to send our response
      * They're spread over multiple descriptors in a scatter/gather set
      * and we can't trust the guest to keep them still; so copy in/out.
      */
@@ -493,20 +499,21 @@ static void fv_queue_worker(gpointer data, gpointer user_data)
              __func__, elem->index, out_num, out_len, req->bad_in_num,
              req->bad_out_num);
 
-    /* The elem should contain a 'fuse_in_header' (in to fuse)
+    /*
+     * The elem should contain a 'fuse_in_header' (in to fuse)
      * plus the data based on the len in the header.
      */
     if (out_len_readable < sizeof(struct fuse_in_header)) {
         fuse_log(FUSE_LOG_ERR, "%s: elem %d too short for in_header\n",
                  __func__, elem->index);
-        assert(0); // TODO
+        assert(0); /* TODO */
     }
     if (out_len > se->bufsize) {
         fuse_log(FUSE_LOG_ERR, "%s: elem %d too large for buffer\n", __func__,
                  elem->index);
-        assert(0); // TODO
+        assert(0); /* TODO */
     }
-    // Copy just the first element and look at it
+    /* Copy just the first element and look at it */
     copy_from_iov(&fbuf, 1, out_sg);
 
     pbufv = NULL; /* Compiler thinks an unitialised path */
@@ -519,13 +526,13 @@ static void fv_queue_worker(gpointer data, gpointer user_data)
             out_sg[1].iov_len == sizeof(struct fuse_write_in)) {
             handled_unmappable = true;
 
-            // copy the fuse_write_in header after the fuse_in_header
+            /* copy the fuse_write_in header after the fuse_in_header */
             fbuf.mem += out_sg->iov_len;
             copy_from_iov(&fbuf, 1, out_sg + 1);
             fbuf.mem -= out_sg->iov_len;
             fbuf.size = out_sg[0].iov_len + out_sg[1].iov_len;
 
-            // Allocate the bufv, with space for the rest of the iov
+            /* Allocate the bufv, with space for the rest of the iov */
             allocated_bufv = true;
             pbufv = malloc(sizeof(struct fuse_bufvec) +
                            sizeof(struct fuse_buf) * (out_num - 2));
@@ -534,12 +541,12 @@ static void fv_queue_worker(gpointer data, gpointer user_data)
             pbufv->buf[0] = fbuf;
 
             size_t iovindex, pbufvindex;
-            iovindex = 2; // 2 headers, separate iovs
-            pbufvindex = 1; // 2 headers, 1 fusebuf
+            iovindex = 2; /* 2 headers, separate iovs */
+            pbufvindex = 1; /* 2 headers, 1 fusebuf */
 
             for (; iovindex < out_num; iovindex++, pbufvindex++) {
                 pbufv->count++;
-                pbufv->buf[pbufvindex].pos = ~0; // Dummy
+                pbufv->buf[pbufvindex].pos = ~0; /* Dummy */
                 pbufv->buf[pbufvindex].flags =
                     (iovindex < out_num_readable) ? 0 : FUSE_BUF_PHYS_ADDR;
                 pbufv->buf[pbufvindex].mem = out_sg[iovindex].iov_base;
@@ -624,8 +631,9 @@ static void fv_queue_worker(gpointer data, gpointer user_data)
     pbufv->off = 0;
     fuse_session_process_buf_int(se, pbufv, &req->ch);
 
-    if (allocated_bufv)
+    if (allocated_bufv) {
         free(pbufv);
+    }
 
     /* If the request has no reply, still recycle the virtqueue element */
     if (!req->reply_sent) {
