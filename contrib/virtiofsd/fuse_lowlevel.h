@@ -23,7 +23,7 @@
 #endif
 
 #include "fuse_common.h"
-#include "fuse_kernel.h"
+#include "standard-headers/linux/fuse.h"
 
 #include <utime.h>
 #include <fcntl.h>
