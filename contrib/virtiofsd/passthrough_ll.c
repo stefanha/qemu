@@ -37,6 +37,8 @@
 #include "fuse_virtio.h"
 #include "fuse_lowlevel.h"
 #include "fuse_log.h"
+#include "qemu/osdep.h"
+#include "qemu/timer.h"
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -2117,9 +2119,14 @@ static void log_func(enum fuse_log_level level,
 	if (current_log_level < level)
 		return;
 
-	if (current_log_level == FUSE_LOG_DEBUG)
-		fmt = g_strdup_printf("[ID: %08ld] %s",
+	if (current_log_level == FUSE_LOG_DEBUG) {
+		if (!use_syslog)
+			fmt = g_strdup_printf("[%ld] [ID: %08ld] %s",
+				get_clock(), syscall(__NR_gettid), _fmt);
+		else
+			fmt = g_strdup_printf("[ID: %08ld] %s",
 				syscall(__NR_gettid), _fmt);
+	}
 
 	if (use_syslog) {
 		int priority = LOG_ERR;
