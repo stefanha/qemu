@@ -1301,13 +1301,13 @@ static bool preadv_present = true;
 static ssize_t
 qemu_preadv(int fd, const struct iovec *iov, int nr_iov, off_t offset)
 {
-    return preadv(fd, iov, nr_iov, offset);
+    return preadv2(fd, iov, nr_iov, offset, RWF_HIPRI);
 }
 
 static ssize_t
 qemu_pwritev(int fd, const struct iovec *iov, int nr_iov, off_t offset)
 {
-    return pwritev(fd, iov, nr_iov, offset);
+    return pwritev2(fd, iov, nr_iov, offset, RWF_HIPRI);
 }
 
 #else
@@ -1363,16 +1363,17 @@ static ssize_t handle_aiocb_rw_linear(RawPosixAIOData *aiocb, char *buf)
     ssize_t len;
 
     while (offset < aiocb->aio_nbytes) {
+        struct iovec iov = {
+            .iov_base = buf + offset,
+            .iov_len = aiocb->aio_nbytes - offset,
+        };
+
         if (aiocb->aio_type & QEMU_AIO_WRITE) {
-            len = pwrite(aiocb->aio_fildes,
-                         (const char *)buf + offset,
-                         aiocb->aio_nbytes - offset,
-                         aiocb->aio_offset + offset);
+            len = qemu_pwritev(aiocb->aio_fildes, &iov, 1,
+                               aiocb->aio_offset + offset);
         } else {
-            len = pread(aiocb->aio_fildes,
-                        buf + offset,
-                        aiocb->aio_nbytes - offset,
-                        aiocb->aio_offset + offset);
+            len = qemu_preadv(aiocb->aio_fildes, &iov, 1,
+                              aiocb->aio_offset + offset);
         }
         if (len == -1 && errno == EINTR) {
             continue;
