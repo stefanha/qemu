@@ -20,6 +20,8 @@
 #include <sys/eventfd.h>
 #endif
 
+#define EFD_AUTORESET (1 << 6)
+
 #ifdef CONFIG_EVENTFD
 /*
  * Initialize @e with existing file descriptor @fd.
@@ -38,7 +40,7 @@ int event_notifier_init(EventNotifier *e, int active)
     int ret;
 
 #ifdef CONFIG_EVENTFD
-    ret = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    ret = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC | EFD_AUTORESET);
 #else
     ret = -1;
     errno = ENOSYS;
@@ -109,6 +111,8 @@ int event_notifier_set(EventNotifier *e)
 
 int event_notifier_test_and_clear(EventNotifier *e)
 {
+    return 1;
+#if 0 /* Not necessary when EFD_AUTORESET is enabled */
     int value;
     ssize_t len;
     char buffer[512];
@@ -121,4 +125,5 @@ int event_notifier_test_and_clear(EventNotifier *e)
     } while ((len == -1 && errno == EINTR) || len == sizeof(buffer));
 
     return value;
+#endif
 }
