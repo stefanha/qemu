@@ -773,6 +773,11 @@ bool virtio_blk_handle_vq(VirtIOBlock *s, VirtQueue *vq)
     do {
         if (suppress_notifications) {
             virtio_queue_set_notification(vq, 0);
+
+            /* HACK permanently suppress notifications if we're polling all the time */
+            if (blk_get_aio_context(s->blk)->poll_max_ns == 999999999999) {
+                suppress_notifications = false;
+            }
         }
 
         while ((req = virtio_blk_get_request(s, vq))) {

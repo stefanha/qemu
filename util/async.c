@@ -415,7 +415,9 @@ void aio_notify(AioContext *ctx)
      */
     smp_mb();
     if (ctx->notify_me) {
-        event_notifier_set(&ctx->notifier);
+        if (ctx->poll_max_ns != 999999999999) {
+            event_notifier_set(&ctx->notifier);
+        }
         atomic_mb_set(&ctx->notified, true);
     }
 }
@@ -427,7 +429,9 @@ void aio_notify_accept(AioContext *ctx)
         || true
 #endif
     ) {
-        event_notifier_test_and_clear(&ctx->notifier);
+        if (ctx->poll_max_ns != 999999999999) {
+            event_notifier_test_and_clear(&ctx->notifier);
+        }
     }
 }
 

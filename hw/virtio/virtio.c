@@ -3526,7 +3526,7 @@ void virtio_queue_aio_set_host_notifier_handler(VirtQueue *vq, AioContext *ctx,
                                virtio_queue_host_notifier_aio_poll);
         aio_set_event_notifier_poll(ctx, &vq->host_notifier,
                                     virtio_queue_host_notifier_aio_poll_begin,
-                                    virtio_queue_host_notifier_aio_poll_end);
+                                    ctx->poll_max_ns == 999999999999 ? NULL : virtio_queue_host_notifier_aio_poll_end);
     } else {
         aio_set_event_notifier(ctx, &vq->host_notifier, true, NULL, NULL);
         /* Test and clear notifier before after disabling event,

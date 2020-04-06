@@ -98,6 +98,7 @@ typedef struct {
      * [1..]: io queues.
      */
     NVMeQueuePair **queues;
+    int io_queue_idx;
     int nr_queues;
     size_t page_size;
     /* How many uint32_t elements does each doorbell entry take. */
@@ -512,6 +513,11 @@ static bool nvme_poll_queues(BDRVNVMeState *s)
 
     for (i = 0; i < s->nr_queues; i++) {
         NVMeQueuePair *q = s->queues[i];
+
+        if (i > 0 && i != s->io_queue_idx) {
+            continue; /* skip the inactive queue */
+        }
+
         qemu_mutex_lock(&q->lock);
         while (nvme_process_completion(s, q)) {
             /* Keep polling */
@@ -531,7 +537,8 @@ static void nvme_handle_event(EventNotifier *n)
     nvme_poll_queues(s);
 }
 
-static bool nvme_add_io_queue(BlockDriverState *bs, Error **errp)
+static bool nvme_add_io_queue(BlockDriverState *bs, bool enable_irqs,
+                              Error **errp)
 {
     BDRVNVMeState *s = bs->opaque;
     int n = s->nr_queues;
@@ -547,7 +554,8 @@ static bool nvme_add_io_queue(BlockDriverState *bs, Error **errp)
         .opcode = NVME_ADM_CMD_CREATE_CQ,
         .prp1 = cpu_to_le64(q->cq.iova),
         .cdw10 = cpu_to_le32(((queue_size - 1) << 16) | (n & 0xFFFF)),
-        .cdw11 = cpu_to_le32(0x3),
+        .cdw11 = cpu_to_le32(0x1) | /* Physically Contiguous */
+                 cpu_to_le32(enable_irqs ? 0x2 : 0), /* Interrupts Enabled */
     };
     if (nvme_cmd_sync(bs, s->queues[0], &cmd)) {
         error_setg(errp, "Failed to create io queue [%d]", n);
@@ -582,6 +590,31 @@ static bool nvme_poll_cb(void *opaque)
     return progress;
 }
 
+static void nvme_detach_aio_context(BlockDriverState *bs)
+{
+    BDRVNVMeState *s = bs->opaque;
+
+    aio_set_event_notifier(bdrv_get_aio_context(bs), &s->irq_notifier,
+                           false, NULL, NULL);
+}
+
+static void nvme_attach_aio_context(BlockDriverState *bs,
+                                    AioContext *new_context)
+{
+    BDRVNVMeState *s = bs->opaque;
+
+    /* Polling is not supported in the main loop Aiocontext, use irqs there */
+    if (new_context == qemu_get_aio_context()) {
+        s->io_queue_idx = 1; /* the irq queue */
+    } else {
+        s->io_queue_idx = 2; /* the polling queue */
+    }
+
+    s->aio_context = new_context;
+    aio_set_event_notifier(new_context, &s->irq_notifier,
+                           false, nvme_handle_event, nvme_poll_cb);
+}
+
 static int nvme_init(BlockDriverState *bs, const char *device, int namespace,
                      Error **errp)
 {
@@ -596,12 +629,12 @@ static int nvme_init(BlockDriverState *bs, const char *device, int namespace,
     qemu_co_queue_init(&s->dma_flush_queue);
     s->device = g_strdup(device);
     s->nsid = namespace;
-    s->aio_context = bdrv_get_aio_context(bs);
     ret = event_notifier_init(&s->irq_notifier, 0);
     if (ret) {
         error_setg(errp, "Failed to init event notifier");
         return ret;
     }
+    nvme_attach_aio_context(bs, bdrv_get_aio_context(bs));
 
     s->vfio = qemu_vfio_open_pci(device, errp);
     if (!s->vfio) {
@@ -679,8 +712,6 @@ static int nvme_init(BlockDriverState *bs, const char *device, int namespace,
     if (ret) {
         goto out;
     }
-    aio_set_event_notifier(bdrv_get_aio_context(bs), &s->irq_notifier,
-                           false, nvme_handle_event, nvme_poll_cb);
 
     nvme_identify(bs, namespace, &local_err);
     if (local_err) {
@@ -690,7 +721,10 @@ static int nvme_init(BlockDriverState *bs, const char *device, int namespace,
     }
 
     /* Set up command queues. */
-    if (!nvme_add_io_queue(bs, errp)) {
+    if (!nvme_add_io_queue(bs, true, errp)) {
+        ret = -EIO;
+    }
+    if (!nvme_add_io_queue(bs, false, errp)) {
         ret = -EIO;
     }
 out:
@@ -963,7 +997,7 @@ static coroutine_fn int nvme_co_prw_aligned(BlockDriverState *bs,
 {
     int r;
     BDRVNVMeState *s = bs->opaque;
-    NVMeQueuePair *ioq = s->queues[1];
+    NVMeQueuePair *ioq = s->queues[s->io_queue_idx];
     NVMeRequest *req;
 
     uint32_t cdw12 = (((bytes >> s->blkshift) - 1) & 0xFFFF) |
@@ -1078,7 +1112,7 @@ static coroutine_fn int nvme_co_pwritev(BlockDriverState *bs,
 static coroutine_fn int nvme_co_flush(BlockDriverState *bs)
 {
     BDRVNVMeState *s = bs->opaque;
-    NVMeQueuePair *ioq = s->queues[1];
+    NVMeQueuePair *ioq = s->queues[s->io_queue_idx];
     NVMeRequest *req;
     NvmeCmd cmd = {
         .opcode = NVME_CMD_FLUSH,
@@ -1109,7 +1143,7 @@ static coroutine_fn int nvme_co_pwrite_zeroes(BlockDriverState *bs,
                                               BdrvRequestFlags flags)
 {
     BDRVNVMeState *s = bs->opaque;
-    NVMeQueuePair *ioq = s->queues[1];
+    NVMeQueuePair *ioq = s->queues[s->io_queue_idx];
     NVMeRequest *req;
 
     uint32_t cdw12 = ((bytes >> s->blkshift) - 1) & 0xFFFF;
@@ -1162,7 +1196,7 @@ static int coroutine_fn nvme_co_pdiscard(BlockDriverState *bs,
                                          int bytes)
 {
     BDRVNVMeState *s = bs->opaque;
-    NVMeQueuePair *ioq = s->queues[1];
+    NVMeQueuePair *ioq = s->queues[s->io_queue_idx];
     NVMeRequest *req;
     NvmeDsmRange *buf;
     QEMUIOVector local_qiov;
@@ -1258,24 +1292,6 @@ static void nvme_refresh_limits(BlockDriverState *bs, Error **errp)
     bs->bl.opt_mem_alignment = s->page_size;
     bs->bl.request_alignment = s->page_size;
     bs->bl.max_transfer = s->max_transfer;
-}
-
-static void nvme_detach_aio_context(BlockDriverState *bs)
-{
-    BDRVNVMeState *s = bs->opaque;
-
-    aio_set_event_notifier(bdrv_get_aio_context(bs), &s->irq_notifier,
-                           false, NULL, NULL);
-}
-
-static void nvme_attach_aio_context(BlockDriverState *bs,
-                                    AioContext *new_context)
-{
-    BDRVNVMeState *s = bs->opaque;
-
-    s->aio_context = new_context;
-    aio_set_event_notifier(new_context, &s->irq_notifier,
-                           false, nvme_handle_event, nvme_poll_cb);
 }
 
 static void nvme_aio_plug(BlockDriverState *bs)

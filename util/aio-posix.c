@@ -140,6 +140,14 @@ void aio_set_fd_handler(AioContext *ctx,
         new_node->pfd.events |= (io_write ? G_IO_OUT | G_IO_ERR : 0);
 
         QLIST_INSERT_HEAD_RCU(&ctx->aio_handlers, new_node, node);
+
+        /* HACK this isn't thread-safe, but force the nvme poll handler to be added to the poll handler list */
+        if (ctx->poll_max_ns == 999999999999 ) {
+            if (ctx->poll_started && new_node->io_poll_begin) {
+                new_node->io_poll_begin(new_node->opaque);
+            }
+            QLIST_INSERT_HEAD(&ctx->poll_aio_handlers, new_node, node_poll);
+        }
     }
 
     /* No need to order poll_disable_cnt writes against other updates;
@@ -499,7 +507,8 @@ static bool run_poll_handlers(AioContext *ctx, int64_t max_ns, int64_t *timeout)
         assert(!(max_ns && progress));
     } while (elapsed_time < max_ns && !ctx->fdmon_ops->need_wait(ctx));
 
-    if (remove_idle_poll_handlers(ctx, start_time + elapsed_time)) {
+    /* TODO let nvme always poll, never drop its idle handler */
+    if (ctx->poll_max_ns != 999999999999 && remove_idle_poll_handlers(ctx, start_time + elapsed_time)) {
         *timeout = 0;
         progress = true;
     }
@@ -543,6 +552,12 @@ static bool try_poll_mode(AioContext *ctx, int64_t *timeout)
         }
     }
 
+    /* HACK force polling to continue, no matter what */
+    if (ctx->poll_max_ns == 999999999999) {
+        *timeout = 0;
+        return true;
+    }
+
     if (poll_set_started(ctx, false)) {
         *timeout = 0;
         return true;
@@ -571,6 +586,8 @@ bool aio_poll(AioContext *ctx, bool blocking)
     if (blocking) {
         atomic_add(&ctx->notify_me, 2);
     }
+
+    /* TODO 100% CPU polling should permantently disable virtqueue kicks poll_begin/end */
 
     qemu_lockcnt_inc(&ctx->list_lock);
 
