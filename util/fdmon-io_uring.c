@@ -272,6 +272,11 @@ static int fdmon_io_uring_wait(AioContext *ctx, AioHandlerList *ready_list,
     unsigned wait_nr = 1; /* block until at least one cqe is ready */
     int ret;
 
+    /* HACK to always poll */
+    if (ctx->poll_max_ns == 999999999999) {
+        timeout = 0;
+    }
+
     /* Fall back while external clients are disabled */
     if (atomic_read(&ctx->external_disable_cnt)) {
         return fdmon_poll_ops.wait(ctx, ready_list, timeout);
