@@ -518,6 +518,11 @@ static bool nvme_poll_queues(BDRVNVMeState *s)
             continue; /* skip the inactive queue */
         }
 
+        /* Quick check for completions outside lock */
+        if ((le16_to_cpu(((NvmeCqe *)&q->cq.queue[q->cq.head * NVME_CQ_ENTRY_BYTES])->status) & 0x1) == q->cq_phase) {
+            continue;
+        }
+
         qemu_mutex_lock(&q->lock);
         while (nvme_process_completion(s, q)) {
             /* Keep polling */
