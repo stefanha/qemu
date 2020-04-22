@@ -767,6 +767,8 @@ bool virtio_blk_handle_vq(VirtIOBlock *s, VirtQueue *vq)
     bool suppress_notifications = virtio_queue_get_notification(vq);
     bool progress = false;
 
+    trace_virtio_blk_handle_vq(VIRTIO_DEVICE(s));
+
     aio_context_acquire(blk_get_aio_context(s->blk));
     blk_io_plug(s->blk);
 
