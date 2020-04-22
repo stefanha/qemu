@@ -770,7 +770,7 @@ bool virtio_blk_handle_vq(VirtIOBlock *s, VirtQueue *vq)
     trace_virtio_blk_handle_vq(VIRTIO_DEVICE(s));
 
     aio_context_acquire(blk_get_aio_context(s->blk));
-    blk_io_plug(s->blk);
+/*    blk_io_plug(s->blk); TODO only plug if multiple requests are in the queue */
 
     do {
         if (suppress_notifications) {
@@ -800,7 +800,7 @@ bool virtio_blk_handle_vq(VirtIOBlock *s, VirtQueue *vq)
         virtio_blk_submit_multireq(s->blk, &mrb);
     }
 
-    blk_io_unplug(s->blk);
+/*    blk_io_unplug(s->blk); */
     aio_context_release(blk_get_aio_context(s->blk));
     return progress;
 }
