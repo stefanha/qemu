@@ -50,8 +50,7 @@ typedef struct {
 } NVMeQueue;
 
 typedef struct {
-    BlockCompletionFunc *cb;
-    void *opaque;
+    BlockAIOCB common;
     int cid;
     void *prp_list_page;
     uint64_t prp_list_iova;
@@ -73,7 +72,7 @@ typedef struct {
     NVMeQueue   sq, cq;
     int         cq_phase;
     int         free_req_head;
-    NVMeRequest reqs[NVME_NUM_REQS];
+    NVMeRequest *reqs[NVME_NUM_REQS];
     int         need_kick;
     int         inflight;
 
@@ -189,6 +188,13 @@ static void nvme_free_queue_pair(NVMeQueuePair *q)
     if (q->completion_bh) {
         qemu_bh_delete(q->completion_bh);
     }
+
+    for (int i = 0; i < NVME_NUM_REQS; i++) {
+        if (q->reqs[i]) {
+            qemu_aio_unref(q->reqs[i]); /* paired with qemu_aio_get() */
+        }
+    }
+
     qemu_vfree(q->prp_list_pages);
     qemu_vfree(q->sq.queue);
     qemu_vfree(q->cq.queue);
@@ -206,6 +212,10 @@ static void nvme_free_req_queue_cb(void *opaque)
     }
     qemu_mutex_unlock(&q->lock);
 }
+
+static const AIOCBInfo nvme_aiocb_info = {
+    .aiocb_size = sizeof(NVMeRequest),
+};
 
 static NVMeQueuePair *nvme_create_queue_pair(BlockDriverState *bs,
                                              int idx, int size,
@@ -230,14 +240,19 @@ static NVMeQueuePair *nvme_create_queue_pair(BlockDriverState *bs,
     if (r) {
         goto fail;
     }
+
+    /* Preallocate AIO requests and place them on the freelist */
     q->free_req_head = -1;
     for (i = 0; i < NVME_NUM_REQS; i++) {
-        NVMeRequest *req = &q->reqs[i];
+        /* Refcount released in nvme_free_queue_pair() */
+        NVMeRequest *req = qemu_aio_get(&nvme_aiocb_info, bs, NULL, NULL);
         req->cid = i + 1;
         req->free_req_next = q->free_req_head;
-        q->free_req_head = i;
         req->prp_list_page = q->prp_list_pages + i * s->page_size;
         req->prp_list_iova = prp_list_iova + i * s->page_size;
+
+        q->free_req_head = i;
+        q->reqs[i] = req;
     }
 
     nvme_init_queue(bs, &q->sq, size, NVME_SQ_ENTRY_BYTES, &local_err);
@@ -297,7 +312,7 @@ static NVMeRequest *nvme_get_free_req(NVMeQueuePair *q)
         }
     }
 
-    req = &q->reqs[q->free_req_head];
+    req = q->reqs[q->free_req_head];
     q->free_req_head = req->free_req_next;
     req->free_req_next = -1;
 
@@ -314,7 +329,7 @@ static NVMeRequest *nvme_get_free_req(NVMeQueuePair *q)
 static void nvme_put_free_req_locked(NVMeQueuePair *q, NVMeRequest *req)
 {
     req->free_req_next = q->free_req_head;
-    q->free_req_head = req - q->reqs;
+    q->free_req_head = req->cid - 1;
 
     /* Stop forcing polling mode if it's polling queue */
     if ((q->index % 2 == 0) && q->index > 0) {
@@ -367,9 +382,6 @@ static bool nvme_process_completion(NVMeQueuePair *q)
 {
     BDRVNVMeState *s = q->s;
     bool progress = false;
-    NVMeRequest *preq;
-    NVMeRequest req;
-    NvmeCqe *c;
 
     trace_nvme_process_completion(s, q->index, q->inflight);
     if (s->plugged) {
@@ -389,6 +401,10 @@ static bool nvme_process_completion(NVMeQueuePair *q)
 
     assert(q->inflight >= 0);
     while (q->inflight) {
+        BlockCompletionFunc *cb;
+        void *cb_opaque;
+        NVMeRequest *req;
+        NvmeCqe *c;
         int ret;
         int16_t cid;
 
@@ -408,15 +424,16 @@ static bool nvme_process_completion(NVMeQueuePair *q)
             continue;
         }
         trace_nvme_complete_command(s, q->index, cid);
-        preq = &q->reqs[cid - 1];
-        req = *preq;
-        assert(req.cid == cid);
-        assert(req.cb);
-        nvme_put_free_req_locked(q, preq);
-        preq->cb = preq->opaque = NULL;
+        req = q->reqs[cid - 1];
+        assert(req->cid == cid);
+        cb = req->common.cb;
+        assert(cb);
+        cb_opaque = req->common.opaque;
+        nvme_put_free_req_locked(q, req);
+        req->common.cb = req->common.opaque = NULL;
         q->inflight--;
         qemu_mutex_unlock(&q->lock);
-        req.cb(req.opaque, ret);
+        cb(cb_opaque, ret);
         qemu_mutex_lock(&q->lock);
         progress = true;
     }
@@ -463,9 +480,9 @@ static void nvme_submit_command(NVMeQueuePair *q, NVMeRequest *req,
                                 NvmeCmd *cmd, BlockCompletionFunc cb,
                                 void *opaque)
 {
-    assert(!req->cb);
-    req->cb = cb;
-    req->opaque = opaque;
+    assert(!req->common.cb);
+    req->common.cb = cb;
+    req->common.opaque = opaque;
     cmd->cid = cpu_to_le32(req->cid);
 
     trace_nvme_submit_command(q->s, q->index, req->cid);
