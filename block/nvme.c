@@ -493,7 +493,6 @@ static void nvme_submit_command(NVMeQueuePair *q, NVMeRequest *req,
     q->sq.tail = (q->sq.tail + 1) % NVME_QUEUE_SIZE;
     q->need_kick++;
     nvme_kick(q);
-    nvme_process_completion(q);
     qemu_mutex_unlock(&q->lock);
 }
 
@@ -999,6 +998,59 @@ static int nvme_probe_blocksizes(BlockDriverState *bs, BlockSizes *bsz)
     return 0;
 }
 
+/* HACK Called without locks and no unmap is necessary */
+static int nvme_cmd_map_qiov_aio(BlockDriverState *bs, NvmeCmd *cmd,
+                                 NVMeRequest *req, QEMUIOVector *qiov)
+{
+    BDRVNVMeState *s = bs->opaque;
+    uint64_t *pagelist = req->prp_list_page;
+    int i, j, r;
+    int entries = 0;
+
+    assert(qiov->size);
+    assert(QEMU_IS_ALIGNED(qiov->size, s->page_size));
+    assert(qiov->size / s->page_size <= s->page_size / sizeof(uint64_t));
+    for (i = 0; i < qiov->niov; ++i) {
+        uint64_t iova;
+        r = qemu_vfio_dma_map(s->vfio,
+                              qiov->iov[i].iov_base,
+                              qiov->iov[i].iov_len,
+                              true, &iova);
+        if (r) {
+            return r;
+        }
+
+        for (j = 0; j < qiov->iov[i].iov_len / s->page_size; j++) {
+            pagelist[entries++] = cpu_to_le64(iova + j * s->page_size);
+        }
+        trace_nvme_cmd_map_qiov_iov(s, i, qiov->iov[i].iov_base,
+                                    qiov->iov[i].iov_len / s->page_size);
+    }
+
+    assert(entries <= s->page_size / sizeof(uint64_t));
+    switch (entries) {
+    case 0:
+        abort();
+    case 1:
+        cmd->prp1 = pagelist[0];
+        cmd->prp2 = 0;
+        break;
+    case 2:
+        cmd->prp1 = pagelist[0];
+        cmd->prp2 = pagelist[1];
+        break;
+    default:
+        cmd->prp1 = pagelist[0];
+        cmd->prp2 = cpu_to_le64(req->prp_list_iova + sizeof(uint64_t));
+        break;
+    }
+    trace_nvme_cmd_map_qiov(s, cmd, req, qiov, entries);
+    for (i = 0; i < entries; ++i) {
+        trace_nvme_cmd_map_qiov_pages(s, i, pagelist[i]);
+    }
+    return 0;
+}
+
 /* Called with s->dma_map_lock */
 static coroutine_fn int nvme_cmd_unmap_qiov(BlockDriverState *bs,
                                             QEMUIOVector *qiov)
@@ -1115,6 +1167,50 @@ static void nvme_rw_cb(void *opaque, int ret)
         return;
     }
     replay_bh_schedule_oneshot_event(data->ctx, nvme_rw_cb_bh, data);
+}
+
+BlockAIOCB *nvme_aio_prw_aligned(BlockDriverState *bs,
+                                 uint64_t offset, uint64_t bytes,
+                                 QEMUIOVector *qiov,
+                                 bool is_write,
+                                 int flags,
+                                 BlockCompletionFunc *cb,
+                                 void *opaque);
+
+BlockAIOCB *nvme_aio_prw_aligned(BlockDriverState *bs,
+                                 uint64_t offset, uint64_t bytes,
+                                 QEMUIOVector *qiov,
+                                 bool is_write,
+                                 int flags,
+                                 BlockCompletionFunc *cb,
+                                 void *opaque)
+{
+    int r;
+    BDRVNVMeState *s = bs->opaque;
+    NVMeQueuePair *ioq = s->queues[s->io_queue_idx];
+    NVMeRequest *req;
+
+    uint32_t cdw12 = (((bytes >> s->blkshift) - 1) & 0xFFFF) |
+                       (flags & BDRV_REQ_FUA ? 1 << 30 : 0);
+    NvmeCmd cmd = {
+        .opcode = is_write ? NVME_CMD_WRITE : NVME_CMD_READ,
+        .nsid = cpu_to_le32(s->nsid),
+        .cdw10 = cpu_to_le32((offset >> s->blkshift) & 0xFFFFFFFF),
+        .cdw11 = cpu_to_le32(((offset >> s->blkshift) >> 32) & 0xFFFFFFFF),
+        .cdw12 = cpu_to_le32(cdw12),
+    };
+
+    trace_nvme_prw_aligned(s, is_write, offset, bytes, flags, qiov->niov);
+    assert(s->nr_queues > 1);
+    req = nvme_get_free_req(ioq);
+    assert(req); /* TODO implement aio sleep mechanism or switch to a coroutine when there are no free requests */
+    /* TODO we should qemu_aio_ref() here but cb() doesn't go through bdrv_aio_complete() or equivalent so actually nothing uses the refcount! */
+
+    r = nvme_cmd_map_qiov_aio(bs, &cmd, req, qiov);
+    assert(r == 0);
+
+    nvme_submit_command(ioq, req, &cmd, cb, opaque);
+    return &req->common;
 }
 
 static coroutine_fn int nvme_co_prw_aligned(BlockDriverState *bs,

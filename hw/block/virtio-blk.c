@@ -381,6 +381,14 @@ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
     }
 }
 
+BlockAIOCB *nvme_aio_prw_aligned(BlockDriverState *bs,
+                                 uint64_t offset, uint64_t bytes,
+                                 QEMUIOVector *qiov,
+                                 bool is_write,
+                                 int flags,
+                                 BlockCompletionFunc *cb,
+                                 void *opaque);
+
 static inline void submit_requests(BlockBackend *blk, MultiReqBuffer *mrb,
                                    int start, int num_reqs, int niov)
 {
@@ -415,6 +423,19 @@ static inline void submit_requests(BlockBackend *blk, MultiReqBuffer *mrb,
         block_acct_merge_done(blk_get_stats(blk),
                               is_write ? BLOCK_ACCT_WRITE : BLOCK_ACCT_READ,
                               num_reqs - 1);
+    }
+
+    /* HACK fast path for nvme driver */
+    uint64_t start_offset = sector_num << BDRV_SECTOR_BITS;
+    if (QEMU_IS_ALIGNED(start_offset, 4096) &&
+        QEMU_IS_ALIGNED(qiov->size, 4096) &&
+        qiov->niov == 1 &&
+        QEMU_IS_ALIGNED((uintptr_t)qiov->iov->iov_base, 4096)) {
+        /* TODO skips in flight counting, quiesce, serialization, etc :( */
+        nvme_aio_prw_aligned(blk_bs(blk), start_offset, qiov->size, qiov,
+                             is_write, 0,
+                             virtio_blk_rw_complete, mrb->reqs[start]);
+        return;
     }
 
     if (is_write) {
