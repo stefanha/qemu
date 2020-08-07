@@ -523,6 +523,7 @@ static bool run_poll_handlers(AioContext *ctx, int64_t max_ns, int64_t *timeout)
 static bool try_poll_mode(AioContext *ctx, int64_t *timeout)
 {
     int64_t max_ns;
+    bool progress = false;
 
     if (QLIST_EMPTY_RCU(&ctx->poll_aio_handlers)) {
         return false;
@@ -533,16 +534,18 @@ static bool try_poll_mode(AioContext *ctx, int64_t *timeout)
         poll_set_started(ctx, true);
 
         if (run_poll_handlers(ctx, max_ns, timeout)) {
-            return true;
+            progress = true;
         }
     }
 
-    if (poll_set_started(ctx, false)) {
+    if (ctx->poll_always_cnt) {
+        ctx->poll_ns = ctx->poll_max_ns;
         *timeout = 0;
-        return true;
+    } else if (!progress && poll_set_started(ctx, false)) {
+        progress = true;
+        *timeout = 0;
     }
-
-    return false;
+    return progress;
 }
 
 bool aio_poll(AioContext *ctx, bool blocking)

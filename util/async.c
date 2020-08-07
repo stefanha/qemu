@@ -531,6 +531,7 @@ AioContext *aio_context_new(Error **errp)
     qemu_rec_mutex_init(&ctx->lock);
     timerlistgroup_init(&ctx->tlg, aio_timerlist_notify, ctx);
 
+    ctx->poll_always_cnt = 0;
     ctx->poll_ns = 0;
     ctx->poll_max_ns = 0;
     ctx->poll_grow = 0;
@@ -617,4 +618,15 @@ void aio_context_acquire(AioContext *ctx)
 void aio_context_release(AioContext *ctx)
 {
     qemu_rec_mutex_unlock(&ctx->lock);
+}
+
+/* TODO atomicity? does it work with poll_disable_cnt? does it work with all fdmons? */
+void aio_inc_poll_always(AioContext *ctx)
+{
+    ctx->poll_always_cnt++;
+}
+
+void aio_dec_poll_always(AioContext *ctx)
+{
+    ctx->poll_always_cnt--;
 }

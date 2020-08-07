@@ -225,6 +225,9 @@ struct AioContext {
     /* Number of AioHandlers without .io_poll() */
     int poll_disable_cnt;
 
+    /* Always poll and don't block in aio_poll() if non-zero */
+    int poll_always_cnt;
+
     /* Polling mode parameters */
     int64_t poll_ns;        /* current polling time in nanoseconds */
     int64_t poll_max_ns;    /* maximum polling time in nanoseconds */
@@ -471,6 +474,16 @@ void aio_set_event_notifier_poll(AioContext *ctx,
                                  EventNotifier *notifier,
                                  EventNotifierHandler *io_poll_begin,
                                  EventNotifierHandler *io_poll_end);
+
+/*
+ * Enable continuous polling mode. aio_poll() will not block in a syscall. Use
+ * this when an AioHandler needs polling and no file descriptor activity is
+ * expected. Call aio_dec_poll_always() to disable continuous polling mode.
+ */
+void aio_inc_poll_always(AioContext *ctx);
+
+/* Disable continuous polling mode. See aio_inc_poll_always(). */
+void aio_dec_poll_always(AioContext *ctx);
 
 /* Return a GSource that lets the main loop poll the file descriptors attached
  * to this AioContext.
