@@ -79,6 +79,7 @@ static void *iothread_run(void *opaque)
          * changed in previous aio_poll()
          */
         if (iothread->running && atomic_read(&iothread->run_gcontext)) {
+            aio_context_use_g_source(iothread->ctx); /* TODO thread safety */
             g_main_loop_run(iothread->main_loop);
         }
     }
