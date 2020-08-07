@@ -453,6 +453,9 @@ void aio_set_fd_poll(AioContext *ctx, int fd,
                      IOHandler *io_poll_begin,
                      IOHandler *io_poll_end);
 
+void aio_set_fd_poll_idle_timeout(AioContext *ctx, int fd,
+                                  bool enable);
+
 /* Register an event notifier and associated callbacks.  Behaves very similarly
  * to event_notifier_set_handler.  Unlike event_notifier_set_handler, these callbacks
  * will be invoked when using aio_poll().

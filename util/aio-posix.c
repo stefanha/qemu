@@ -177,6 +177,16 @@ void aio_set_fd_poll(AioContext *ctx, int fd,
     node->io_poll_end = io_poll_end;
 }
 
+/* TODO concurrency */
+void aio_set_fd_poll_idle_timeout(AioContext *ctx, int fd,
+                                  bool enable)
+{
+    AioHandler *node = find_aio_handler(ctx, fd);
+    if (node) {
+        node->poll_idle_timeout = enable ? 0LL : -1LL;
+    }
+}
+
 void aio_set_event_notifier(AioContext *ctx,
                             EventNotifier *notifier,
                             bool is_external,
@@ -396,7 +406,9 @@ static bool run_poll_handlers_once(AioContext *ctx,
     QLIST_FOREACH_SAFE(node, &ctx->poll_aio_handlers, node_poll, tmp) {
         if (aio_node_check(ctx, node->is_external) &&
             node->io_poll(node->opaque)) {
-            node->poll_idle_timeout = now + POLL_IDLE_INTERVAL_NS;
+            if (node->poll_idle_timeout != -1LL) {
+                node->poll_idle_timeout = now + POLL_IDLE_INTERVAL_NS;
+            }
 
             /*
              * Polling was successful, exit try_poll_mode immediately
@@ -436,9 +448,16 @@ static bool remove_idle_poll_handlers(AioContext *ctx, int64_t now)
     }
 
     QLIST_FOREACH_SAFE(node, &ctx->poll_aio_handlers, node_poll, tmp) {
+        if (node->poll_idle_timeout == -1LL) {
+            continue; /* poll idle timeout disabled */
+        }
+
         if (node->poll_idle_timeout == 0LL) {
             node->poll_idle_timeout = now + POLL_IDLE_INTERVAL_NS;
-        } else if (now >= node->poll_idle_timeout) {
+            continue; /* new node, initialize timeout */
+        }
+
+        if (now >= node->poll_idle_timeout) {
             trace_poll_remove(ctx, node, node->pfd.fd);
             node->poll_idle_timeout = 0LL;
             QLIST_SAFE_REMOVE(node, node_poll);
