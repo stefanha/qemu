@@ -701,7 +701,7 @@ void aio_context_setup(AioContext *ctx);
  */
 void aio_context_destroy(AioContext *ctx);
 
-/* Used internally, do not call outside AioContext code */
+/* Call this before using the GSource */
 void aio_context_use_g_source(AioContext *ctx);
 
 /**
