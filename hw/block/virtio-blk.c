@@ -505,7 +505,7 @@ static void virtio_blk_handle_flush(VirtIOBlockReq *req, MultiReqBuffer *mrb)
     /*
      * Make sure all outstanding writes are posted to the backing device.
      */
-    if (mrb->is_write && mrb->num_reqs > 0) {
+    if (mrb && mrb->is_write && mrb->num_reqs > 0) {
         virtio_blk_submit_multireq(s->blk, mrb);
     }
     blk_aio_flush(s->blk, virtio_blk_flush_complete, req);
@@ -678,6 +678,17 @@ static int virtio_blk_handle_request(VirtIOBlockReq *req, MultiReqBuffer *mrb)
         block_acct_start(blk_get_stats(s->blk), &req->acct, req->qiov.size,
                          is_write ? BLOCK_ACCT_WRITE : BLOCK_ACCT_READ);
 
+        if (!mrb) {
+            if (is_write) {
+                blk_aio_pwritev(s->blk, req->sector_num << BDRV_SECTOR_BITS,
+                                &req->qiov, 0, virtio_blk_rw_complete, req);
+            } else {
+                blk_aio_preadv(s->blk, req->sector_num << BDRV_SECTOR_BITS,
+                               &req->qiov, 0, virtio_blk_rw_complete, req);
+            }
+            break;
+        }
+
         /* merge would exceed maximum number of requests or IO direction
          * changes */
         if (mrb->num_reqs > 0 && (mrb->num_reqs == VIRTIO_BLK_MAX_MERGE_REQS ||
@@ -763,7 +774,6 @@ static int virtio_blk_handle_request(VirtIOBlockReq *req, MultiReqBuffer *mrb)
 bool virtio_blk_handle_vq(VirtIOBlock *s, VirtQueue *vq)
 {
     VirtIOBlockReq *req;
-    MultiReqBuffer mrb = {};
     bool suppress_notifications = virtio_queue_get_notification(vq);
     bool progress = false;
 
@@ -777,7 +787,7 @@ bool virtio_blk_handle_vq(VirtIOBlock *s, VirtQueue *vq)
 
         while ((req = virtio_blk_get_request(s, vq))) {
             progress = true;
-            if (virtio_blk_handle_request(req, &mrb)) {
+            if (virtio_blk_handle_request(req, NULL)) {
                 virtqueue_detach_element(req->vq, &req->elem, 0);
                 virtio_blk_free_request(req);
                 break;
@@ -788,10 +798,6 @@ bool virtio_blk_handle_vq(VirtIOBlock *s, VirtQueue *vq)
             virtio_queue_set_notification(vq, 1);
         }
     } while (!virtio_queue_empty(vq));
-
-    if (mrb.num_reqs) {
-        virtio_blk_submit_multireq(s->blk, &mrb);
-    }
 
 /*    blk_io_unplug(s->blk); */
     aio_context_release(blk_get_aio_context(s->blk));
@@ -822,14 +828,13 @@ static void virtio_blk_handle_output(VirtIODevice *vdev, VirtQueue *vq)
 void virtio_blk_process_queued_requests(VirtIOBlock *s, bool is_bh)
 {
     VirtIOBlockReq *req = s->rq;
-    MultiReqBuffer mrb = {};
 
     s->rq = NULL;
 
     aio_context_acquire(blk_get_aio_context(s->conf.conf.blk));
     while (req) {
         VirtIOBlockReq *next = req->next;
-        if (virtio_blk_handle_request(req, &mrb)) {
+        if (virtio_blk_handle_request(req, NULL)) {
             /* Device is now broken and won't do any processing until it gets
              * reset. Already queued requests will be lost: let's purge them.
              */
@@ -844,9 +849,6 @@ void virtio_blk_process_queued_requests(VirtIOBlock *s, bool is_bh)
         req = next;
     }
 
-    if (mrb.num_reqs) {
-        virtio_blk_submit_multireq(s->blk, &mrb);
-    }
     if (is_bh) {
         blk_dec_in_flight(s->conf.conf.blk);
     }
