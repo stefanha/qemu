@@ -768,7 +768,7 @@ bool virtio_blk_handle_vq(VirtIOBlock *s, VirtQueue *vq)
     bool progress = false;
 
     aio_context_acquire(blk_get_aio_context(s->blk));
-    blk_io_plug(s->blk);
+/*    blk_io_plug(s->blk); */
 
     do {
         if (suppress_notifications) {
@@ -793,7 +793,7 @@ bool virtio_blk_handle_vq(VirtIOBlock *s, VirtQueue *vq)
         virtio_blk_submit_multireq(s->blk, &mrb);
     }
 
-    blk_io_unplug(s->blk);
+/*    blk_io_unplug(s->blk); */
     aio_context_release(blk_get_aio_context(s->blk));
     return progress;
 }
