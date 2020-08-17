@@ -525,6 +525,7 @@ static bool try_poll_mode(AioContext *ctx, int64_t *timeout)
     int64_t max_ns;
 
     if (QLIST_EMPTY_RCU(&ctx->poll_aio_handlers)) {
+        poll_set_started(ctx, false);
         return false;
     }
 
@@ -537,7 +538,7 @@ static bool try_poll_mode(AioContext *ctx, int64_t *timeout)
         }
     }
 
-    if (poll_set_started(ctx, false)) {
+    if (*timeout && poll_set_started(ctx, false)) {
         *timeout = 0;
         return true;
     }
