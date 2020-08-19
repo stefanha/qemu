@@ -553,7 +553,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
     bool progress;
     bool use_notify_me;
     int64_t timeout;
-    int64_t start = 0;
+/*    int64_t start = 0; */
 
     /*
      * There cannot be two concurrent aio_poll calls for the same AioContext (or
@@ -565,7 +565,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
     qemu_lockcnt_inc(&ctx->list_lock);
 
     if (ctx->poll_max_ns) {
-        start = qemu_clock_get_ns(QEMU_CLOCK_REALTIME);
+        /*start =*/ qemu_clock_get_ns(QEMU_CLOCK_REALTIME);
     }
 
     timeout = blocking ? aio_compute_timeout(ctx) : 0;
@@ -612,6 +612,9 @@ bool aio_poll(AioContext *ctx, bool blocking)
 
     /* Adjust polling time */
     if (ctx->poll_max_ns) {
+        ctx->poll_ns = ctx->poll_max_ns;
+
+#if 0 /* always use max polling time */
         int64_t block_ns = qemu_clock_get_ns(QEMU_CLOCK_REALTIME) - start;
 
         if (block_ns <= ctx->poll_ns) {
@@ -649,6 +652,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
 
             trace_poll_grow(ctx, old, ctx->poll_ns);
         }
+#endif
     }
 
     progress |= aio_bh_poll(ctx);
