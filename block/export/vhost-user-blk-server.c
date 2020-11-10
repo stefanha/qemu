@@ -248,8 +248,8 @@ static void coroutine_fn vu_blk_virtio_process_req(void *opaque)
             break;
         }
 
-        req->in->status = vu_blk_discard_write_zeroes(vexp, elem->out_sg,
-                                                      out_num, type);
+        req->in->status = vu_blk_discard_write_zeroes(vexp, out_iov, out_num,
+                                                      type);
         break;
     }
     default:
