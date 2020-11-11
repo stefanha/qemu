@@ -214,9 +214,23 @@ static void coroutine_fn vu_blk_virtio_process_req(void *opaque)
         QEMUIOVector qiov;
         if (is_write) {
             qemu_iovec_init_external(&qiov, out_iov, out_num);
+
+            if (unlikely(!vu_blk_sect_range_ok(vexp, req->sector_num,
+                                               qiov.size))) {
+                req->in->status = VIRTIO_BLK_S_IOERR;
+                break;
+            }
+
             ret = blk_co_pwritev(blk, offset, qiov.size, &qiov, 0);
         } else {
             qemu_iovec_init_external(&qiov, in_iov, in_num);
+
+            if (unlikely(!vu_blk_sect_range_ok(vexp, req->sector_num,
+                                               qiov.size))) {
+                req->in->status = VIRTIO_BLK_S_IOERR;
+                break;
+            }
+
             ret = blk_co_preadv(blk, offset, qiov.size, &qiov, 0);
         }
         if (ret >= 0) {
